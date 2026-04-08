@@ -4,6 +4,8 @@ import re
 from typing import Any, Dict
 from urllib.parse import urlparse
 
+import pandas as pd
+
 # Conservative thresholds tuned for high precision
 MIN_WIDTH = 120
 MIN_HEIGHT = 120
@@ -125,3 +127,78 @@ def has_extreme_aspect_ratio(aspect_ratio: Any) -> bool:
         return False
 
     return ar > MAX_EXTREME_ASPECT_RATIO or ar < MIN_EXTREME_ASPECT_RATIO
+
+
+def _to_bool_series(series: pd.Series) -> pd.Series:
+    if series.dtype == bool:
+        return series.fillna(False)
+    text = series.astype(str).str.strip().str.lower()
+    return text.isin({"1", "true", "yes", "y", "t"})
+
+
+def build_ml_feature_frame(df: pd.DataFrame) -> pd.DataFrame:
+    """Prepare tabular ML features using shared logic for train and inference."""
+    work_df = df.copy()
+
+    numeric_cols = ["width", "height", "area", "aspect_ratio", "file_size_bytes"]
+    for col in numeric_cols:
+        if col not in work_df.columns:
+            work_df[col] = pd.NA
+        work_df[col] = pd.to_numeric(work_df[col], errors="coerce")
+
+    for col in ["format", "image_url", "file_name", "alt_text", "domain"]:
+        if col not in work_df.columns:
+            work_df[col] = ""
+        work_df[col] = work_df[col].fillna("").astype(str)
+
+    if "is_tiny" in work_df.columns:
+        is_tiny = _to_bool_series(work_df["is_tiny"])
+    else:
+        is_tiny = work_df.apply(
+            lambda r: is_too_small(r.get("width"), r.get("height"), r.get("area")), axis=1
+        )
+
+    if "has_ui_keyword" in work_df.columns:
+        has_ui_keyword = _to_bool_series(work_df["has_ui_keyword"])
+    else:
+        has_ui_keyword = work_df.apply(
+            lambda r: has_suspicious_keyword(r.get("image_url", ""), r.get("file_name", ""), r.get("alt_text", "")),
+            axis=1,
+        )
+
+    if "is_suspicious_domain" in work_df.columns:
+        is_suspicious_domain = _to_bool_series(work_df["is_suspicious_domain"])
+    else:
+        is_suspicious_domain = work_df["domain"].str.contains("analytics|ad|tracker|pixel", case=False, regex=True)
+
+    base = pd.DataFrame(
+        {
+            "width": work_df["width"],
+            "height": work_df["height"],
+            "area": work_df["area"],
+            "aspect_ratio": work_df["aspect_ratio"],
+            "file_size_bytes": work_df["file_size_bytes"],
+            "format": work_df["format"].str.lower().replace("", "unknown"),
+            "is_tiny": is_tiny.astype(int),
+            "is_suspicious_domain": is_suspicious_domain.astype(int),
+            "has_ui_keyword": has_ui_keyword.astype(int),
+        }
+    )
+
+    base["is_too_small"] = base.apply(
+        lambda r: int(is_too_small(r["width"], r["height"], r["area"])), axis=1
+    )
+    base["has_extreme_aspect_ratio"] = base["aspect_ratio"].apply(
+        lambda x: int(has_extreme_aspect_ratio(x))
+    )
+
+    tracking_flags = work_df.apply(
+        lambda r: extract_url_flags(r.get("image_url", ""), r.get("file_name", ""), r.get("alt_text", "")),
+        axis=1,
+    )
+    base["has_tracking_hint"] = tracking_flags.apply(lambda x: int(bool(x["has_tracking_hint"])))
+    base["has_suspicious_keyword"] = tracking_flags.apply(
+        lambda x: int(bool(x["has_suspicious_keyword"]))
+    )
+
+    return base
