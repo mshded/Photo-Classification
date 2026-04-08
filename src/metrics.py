@@ -31,6 +31,59 @@ def compute_classification_metrics(y_true: Iterable[int], y_pred: Iterable[int])
     }
 
 
+def evaluate_model_on_split(
+    y_true: Iterable[int], y_pred: Iterable[int], y_proba: Iterable[float] | None = None
+) -> Dict[str, float]:
+    metrics = compute_classification_metrics(y_true=y_true, y_pred=y_pred)
+    if y_proba is not None:
+        proba_series = pd.Series(list(y_proba), dtype=float)
+        metrics.update(
+            {
+                "mean_proba": float(proba_series.mean()),
+                "median_proba": float(proba_series.median()),
+                "proba_p90": float(proba_series.quantile(0.9)),
+            }
+        )
+    return metrics
+
+
+def build_threshold_metrics_table(
+    y_true: Iterable[int],
+    y_proba: Iterable[float],
+    thresholds: Iterable[float] | None = None,
+) -> pd.DataFrame:
+    y_true_s = pd.Series(list(y_true)).astype(int)
+    y_proba_s = pd.Series(list(y_proba)).astype(float)
+
+    if thresholds is None:
+        thresholds = [i / 100 for i in range(10, 100, 5)]
+
+    rows = []
+    for t in thresholds:
+        y_pred = (y_proba_s >= float(t)).astype(int)
+        row = compute_classification_metrics(y_true=y_true_s, y_pred=y_pred)
+        row["threshold"] = float(t)
+        rows.append(row)
+
+    return pd.DataFrame(rows).sort_values(
+        by=["precision", "f1", "recall", "threshold"], ascending=[False, False, False, False]
+    )
+
+
+def select_threshold_for_precision(
+    y_true: Iterable[int],
+    y_proba: Iterable[float],
+    min_positive_predictions: int = 1,
+) -> tuple[float, pd.DataFrame]:
+    metrics_table = build_threshold_metrics_table(y_true=y_true, y_proba=y_proba)
+    valid = metrics_table[metrics_table["tp"] + metrics_table["fp"] >= min_positive_predictions]
+    if valid.empty:
+        valid = metrics_table.copy()
+
+    best_row = valid.iloc[0]
+    return float(best_row["threshold"]), metrics_table
+
+
 def evaluate_baseline_on_labels(labels_csv_path: str) -> Dict[str, float] | pd.DataFrame:
     labels_path = Path(labels_csv_path)
     if not labels_path.exists():
