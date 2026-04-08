@@ -1,0 +1,27 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+.env/
+.env*
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Data
+data/raw/
+data/interim/
+results/
+
+# Model artifacts
+models/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# VS Code settings
+.vscode/
