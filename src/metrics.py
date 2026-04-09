@@ -18,11 +18,13 @@ def compute_classification_metrics(y_true: Iterable[int], y_pred: Iterable[int])
     precision = tp / (tp + fp) if (tp + fp) else 0.0
     recall = tp / (tp + fn) if (tp + fn) else 0.0
     f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) else 0.0
+    accuracy = (tp + tn) / len(y_true) if len(y_true) else 0.0
 
     return {
         "precision": precision,
         "recall": recall,
         "f1": f1,
+        "accuracy": accuracy,
         "tp": tp,
         "fp": fp,
         "fn": fn,
@@ -65,23 +67,27 @@ def build_threshold_metrics_table(
         row["threshold"] = float(t)
         rows.append(row)
 
-    return pd.DataFrame(rows).sort_values(
-        by=["precision", "f1", "recall", "threshold"], ascending=[False, False, False, False]
-    )
+    return pd.DataFrame(rows)
 
 
 def select_threshold_for_precision(
     y_true: Iterable[int],
     y_proba: Iterable[float],
     min_positive_predictions: int = 1,
+    tie_breaker: str = "recall",
 ) -> tuple[float, pd.DataFrame]:
     metrics_table = build_threshold_metrics_table(y_true=y_true, y_proba=y_proba)
-    valid = metrics_table[metrics_table["tp"] + metrics_table["fp"] >= min_positive_predictions]
+    tie_breaker = tie_breaker if tie_breaker in {"recall", "f1"} else "recall"
+    sorted_table = metrics_table.sort_values(
+        by=["precision", tie_breaker, "f1", "threshold"],
+        ascending=[False, False, False, False],
+    )
+    valid = sorted_table[sorted_table["tp"] + sorted_table["fp"] >= min_positive_predictions]
     if valid.empty:
-        valid = metrics_table.copy()
+        valid = sorted_table.copy()
 
     best_row = valid.iloc[0]
-    return float(best_row["threshold"]), metrics_table
+    return float(best_row["threshold"]), sorted_table.reset_index(drop=True)
 
 
 def evaluate_baseline_on_labels(labels_csv_path: str) -> Dict[str, float] | pd.DataFrame:
