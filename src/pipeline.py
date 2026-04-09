@@ -9,7 +9,6 @@ from urllib.parse import urlparse
 
 import pandas as pd
 
-from src.classifier import load_model_artifacts, predict_proba
 from src.features import (
     REPEATED_URL_THRESHOLD,
     extract_url_flags,
@@ -174,6 +173,9 @@ def apply_baseline_rules(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def apply_ml_filter(df: pd.DataFrame, model_path: str) -> pd.DataFrame:
+    # Import ML classifier lazily so baseline-only mode does not require sklearn deps.
+    from src.classifier import load_model_artifacts, predict_proba
+
     out = df.copy()
     out["ml_score"] = pd.NA
     out["ml_pred"] = 0
