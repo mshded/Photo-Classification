@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
 
 from src.pipeline import run_pipeline_for_url
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Demo: production ML pipeline")
+    parser = argparse.ArgumentParser(description="Demo: image content filtering pipeline")
     parser.add_argument("--url", required=True, help="Page URL to process")
     parser.add_argument(
         "--output_dir",
@@ -24,6 +23,12 @@ def parse_args() -> argparse.Namespace:
         default="models/best_model.pkl",
         help="Path to model artifacts",
     )
+    parser.add_argument(
+        "--mode",
+        default="baseline_plus_ml",
+        choices=["baseline_only", "baseline_plus_ml"],
+        help="Filtering mode (default: baseline_plus_ml)",
+    )
     return parser.parse_args()
 
 
@@ -34,19 +39,23 @@ def main() -> None:
         url=args.url,
         output_dir=args.output_dir,
         raw_dir=args.raw_dir,
-        mode="baseline_plus_ml",
+        mode=args.mode,
         model_path=args.model_path,
     )
 
-    print(f"URL страницы: {summary.get('url', args.url)}")
-    print("Режим: ml")
+    print(f"URL страницы: {summary.get('page_url', args.url)}")
+    print(f"Page ID: {summary.get('page_id', '-')}")
+    print(f"Режим: {summary.get('mode', args.mode)}")
     print(f"Найдено кандидатов: {summary.get('total_candidates', 0)}")
     print(f"Успешно скачано изображений: {summary.get('downloaded_ok', 0)}")
-    print(f"Отброшено prefilter: {summary.get('baseline_rejected', 0)}")
+    print(f"Отброшено baseline: {summary.get('baseline_rejected', 0)}")
     print(f"Передано в ML: {summary.get('ml_candidates', 0)}")
-    print(f"Сохранено финально: {summary.get('final_kept', 0)}")
+    print(f"Финально оставлено: {summary.get('final_kept', 0)}")
 
-    print(f"CSV результатов: {summary.get('results_csv', '')}")
+    if summary.get("total_candidates", 0) == 0:
+        print("Сообщение: на странице не найдено кандидатов изображений.")
+    elif summary.get("final_kept", 0) == 0:
+        print("Сообщение: содержательные изображения не найдены после фильтрации.")
 
     top_reasons = summary.get("top_reject_reasons", {})
     print("Топ причин отбрасывания:")
@@ -56,9 +65,13 @@ def main() -> None:
         for reason, cnt in top_reasons.items():
             print(f"  - {reason}: {cnt}")
 
-    results_csv = Path(summary.get("results_csv", ""))
-    if results_csv.exists() and results_csv.stat().st_size == 0:
-        print("Примечание: кандидаты на странице не найдены.")
+    artifacts = summary.get("paths_to_saved_artifacts", {})
+    print("Артефакты:")
+    print(f"  page_info.json: {artifacts.get('page_info', '')}")
+    print(f"  candidates.csv: {artifacts.get('candidates_csv', '')}")
+    print(f"  final_kept.csv: {artifacts.get('final_kept_csv', '')}")
+    print(f"  run_log.json: {artifacts.get('run_log', '')}")
+    print(f"  final_keep/: {artifacts.get('final_keep_dir', '')}")
 
 
 if __name__ == "__main__":
