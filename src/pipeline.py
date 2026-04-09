@@ -268,17 +268,11 @@ def run_pipeline_for_url(
     df = enrich_with_image_metadata(df)
     df = apply_baseline_rules(df)
 
-    if mode == "baseline_plus_ml":
-        df = apply_ml_filter(df=df, model_path=model_path)
-        results_csv = page_output_dir / "ml_results.csv"
-        df.to_csv(results_csv, index=False)
-        save_positive_images(df, page_output_dir, keep_col="final_keep")
-    else:
-        df["final_keep"] = df["baseline_keep"]
-        results_csv = page_output_dir / "baseline_results.csv"
-        df.to_csv(results_csv, index=False)
-        save_positive_images(df, page_output_dir, keep_col="baseline_keep")
-
+    df = apply_ml_filter(df=df, model_path=model_path)
+    results_csv = page_output_dir / "ml_results.csv"
+    df.to_csv(results_csv, index=False)
+    save_positive_images(df, page_output_dir, keep_col="final_keep")
+    
     summary = summarize_baseline_results(df)
     summary.update({"url": url, "page_id": page_id, "results_csv": str(results_csv), "mode": mode})
     return summary

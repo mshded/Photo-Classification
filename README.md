@@ -29,3 +29,5 @@ python run_train.py --labels_csv data/labels.csv --model_path models/best_model.
 ```bash
 python run_demo.py --url "https://example.com/page" --model_path models/best_model.pkl
 ```
+
+python run_demo.py --url "https://eda.rambler.ru/media/recepty/recepty-kulichey-na-pashu-ot-klassiki-do-bystryh-variantov" --model_path models/best_model.pkl
