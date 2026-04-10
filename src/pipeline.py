@@ -14,7 +14,6 @@ from src.features import (
     extract_url_flags,
     has_extreme_aspect_ratio,
     is_probable_tracking_pixel,
-    is_too_small,
 )
 from src.image_utils import download_image, get_image_metadata, make_unique_filename
 from src.parser import collect_image_candidates
@@ -191,15 +190,15 @@ def apply_hard_prefilter(df: pd.DataFrame) -> pd.DataFrame:
         ):
             flags.append("probable_tracking_pixel")
 
-        if is_too_small(width, height, area):
-            flags.append("too_small")
-
+        soft_flags = []
         if has_extreme_aspect_ratio(row.get("aspect_ratio")):
-            flags.append("extreme_aspect_ratio")
+            soft_flags.append("extreme_aspect_ratio")
 
         image_url = row.get("image_url", "")
         if repeat_counts.get(image_url, 0) >= REPEATED_URL_THRESHOLD:
-            flags.append("repeated_url")
+            soft_flags.append("repeated_url")
+        if url_flags["has_suspicious_keyword"]:
+            soft_flags.append("ui_or_ads_keyword")
 
         hard_reject = {
             "download_failed",
@@ -207,17 +206,13 @@ def apply_hard_prefilter(df: pd.DataFrame) -> pd.DataFrame:
             "tiny_dimensions_le_5",
             "tiny_file_size",
             "probable_tracking_pixel",
-            "too_small",
             "tracking_url_hint",
-            "ui_or_ads_keyword",
-            "extreme_aspect_ratio",
-            "repeated_url",
         }
 
         keep = not any(f in hard_reject for f in flags)
         keeps.append(keep)
-        reasons.append("" if keep else ";".join(flags))
-        flags_col.append(json.dumps(flags, ensure_ascii=False))
+        reasons.append("" if keep else ";".join([f for f in flags if f in hard_reject]))
+        flags_col.append(json.dumps(flags + soft_flags, ensure_ascii=False))
 
     out["hard_prefilter_keep"] = keeps
     out["hard_reject_reason"] = reasons

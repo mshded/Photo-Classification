@@ -57,7 +57,7 @@ def build_threshold_metrics_table(
     y_proba_s = pd.Series(list(y_proba)).astype(float)
 
     if thresholds is None:
-        thresholds = [i / 100 for i in range(10, 100, 5)]
+        thresholds = [i / 100 for i in range(1, 100)]
 
     rows = []
     for t in thresholds:

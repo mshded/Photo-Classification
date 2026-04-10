@@ -99,13 +99,20 @@ def _assign_group_splits(df: pd.DataFrame, random_state: int = 42) -> pd.DataFra
     return out
 
 
-def load_labeled_data(labels_csv_path: str = "data/labels.csv") -> pd.DataFrame:
+def load_labeled_data(
+    labels_csv_path: str = "data/labels.csv",
+    force_regenerate_split: bool = True,
+) -> pd.DataFrame:
     df = pd.read_csv(labels_csv_path)
     out = df.copy()
     out["target"] = out["label"].map(LABEL_MAP)
     out = out[out["target"].isin([0, 1])].copy()
 
-    if "split" in out.columns and out["split"].fillna("").str.strip().ne("").any():
+    if (
+        not force_regenerate_split
+        and "split" in out.columns
+        and out["split"].fillna("").str.strip().ne("").any()
+    ):
         out["split"] = out["split"].fillna("").astype(str).str.strip().str.lower()
         return out
 

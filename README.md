@@ -30,6 +30,9 @@ pip install -r requirements.txt
 - `notebooks/03_training.ipynb`
 
 Основная логика обучения/фичей/метрик остаётся в `src/classifier.py`, `src/features.py`, `src/metrics.py`.
+`load_labeled_data()` по умолчанию пересобирает `train/val/test` через group-aware split
+(content hash -> normalized image_url -> page_url -> fallback), чтобы старый `split` из CSV
+не обходил честное разбиение.
 
 ### Как выбирается порог
 
@@ -61,3 +64,6 @@ python run_demo.py --url "https://example.com/page" --model_path models/best_mod
 - `final_kept.csv` — только строки с `final_keep == True`;
 - `run_log.json` — сводка запуска (counts, причины hard reject, пути);
 - `final_keep/` — реально сохранённые финальные изображения.
+
+Эти demo-артефакты генерируются локально для демонстрации и **не должны храниться в Git**
+(`results/` и `models/` уже исключены через `.gitignore`).
