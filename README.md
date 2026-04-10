@@ -1,20 +1,21 @@
 # Photo Classification Project
 
-Учебный MVP для фильтрации изображений со страниц сайтов с фокусом на **precision**:
+Учебный **ML-based MVP** для фильтрации изображений со страниц сайтов с фокусом на **precision**:
 оставляем только содержательные изображения страницы и отбрасываем иконки, кнопки,
-декоративные/повторяющиеся UI-элементы, логотипы и рекламные баннеры.
+декоративные/повторяющиеся UI-элементы, логотипы, рекламные баннеры и tracking-пиксели.
 
-## Что делает пайплайн
+## Финальный пайплайн (один публичный сценарий)
 
 Для заданного URL пайплайн:
 1. Собирает кандидаты изображений из обычного HTML (`src/parser.py`, `requests + BeautifulSoup`).
 2. Скачивает кандидаты в `data/raw/<page_id>/`.
 3. Извлекает метаданные изображений (валидность, размеры, формат, aspect ratio и т.д.).
-4. Применяет baseline-фильтрацию (правила для отсечения явного мусора).
-5. Применяет ML-фильтр к baseline-кандидатам.
-6. Сохраняет финальные содержательные изображения и артефакты demo-запуска.
+4. Применяет встроенный **hard prefilter** для явного технического мусора.
+5. Для оставшихся кандидатов считает ML-score и применяет порог из сохранённых артефактов модели.
+6. Сохраняет только `final_keep` изображения и артефакты demo-запуска.
 
-Проект ориентирован на обычные HTML-сайты и простую подгрузку (без усложнений типа SPA-first/segmentation/OCR).
+> В проекте нет user-facing baseline режима: используется один ML pipeline
+> с детерминированным hard prefilter до модели.
 
 ## Установка
 
@@ -22,18 +23,29 @@
 pip install -r requirements.txt
 ```
 
-## Обучение модели
+## Обучение модели (канонический путь)
 
-```bash
-python run_train.py --labels_csv data/labels.csv --model_path models/best_model.pkl
-```
+Обучение и анализ метрик выполняются в ноутбуке:
+
+- `notebooks/03_training.ipynb`
+
+Основная логика обучения/фичей/метрик остаётся в `src/classifier.py`, `src/features.py`, `src/metrics.py`.
+
+### Как выбирается порог
+
+- `train`: fit модели;
+- `val`: подбор threshold под высокий precision (`select_threshold_for_precision`);
+- `test`: финальная оценка с зафиксированным порогом.
+
+Выбранный `threshold` сохраняется в `models/best_model.pkl` и используется в demo pipeline.
 
 ## Запуск demo
 
 ```bash
 python run_demo.py --url "https://example.com/page" --model_path models/best_model.pkl
 ```
-Дополнительные аргументы run_demo:
+
+Дополнительные аргументы `run_demo.py`:
 - `--output_dir` (по умолчанию `results/examples`)
 - `--raw_dir` (по умолчанию `data/raw`)
 
@@ -43,9 +55,9 @@ python run_demo.py --url "https://example.com/page" --model_path models/best_mod
 
 `results/examples/<page_id>/`
 
-Внутри:
-- `page_info.json` — параметры запуска страницы;
-- `candidates.csv` — все кандидаты после скачивания/обогащения и фильтрации;
+Минимальный набор артефактов:
+- `page_info.json` — параметры запуска;
+- `candidates.csv` — кандидаты с тех. метаданными, hard prefilter и ML-результатами;
 - `final_kept.csv` — только строки с `final_keep == True`;
-- `run_log.json` — сводка запуска (counts, причины отбрасывания, пути к артефактам);
+- `run_log.json` — сводка запуска (counts, причины hard reject, пути);
 - `final_keep/` — реально сохранённые финальные изображения.
