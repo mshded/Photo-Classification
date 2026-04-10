@@ -12,7 +12,7 @@ venv/
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints/
 
-# Data - ignore raw and interim only
+# Data
 data/raw/
 data/interim/
 
