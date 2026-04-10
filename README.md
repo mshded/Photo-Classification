@@ -67,3 +67,6 @@ python run_demo.py --url "https://example.com/page" --model_path models/best_mod
 
 Эти demo-артефакты генерируются локально для демонстрации и **не должны храниться в Git**
 (`results/` и `models/` уже исключены через `.gitignore`).
+
+Эти demo-артефакты генерируются локально для демонстрации и **не должны храниться в Git**
+(`results/` и `models/` уже исключены через `.gitignore`).
