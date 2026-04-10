@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Dict, Iterable
 
 import pandas as pd
@@ -100,24 +99,3 @@ def select_threshold_for_precision(
 
     best_row = sorted_table.iloc[0]
     return float(best_row["threshold"]), metrics_table.sort_values("threshold").reset_index(drop=True)
-
-
-def evaluate_baseline_on_labels(labels_csv_path: str) -> Dict[str, float] | pd.DataFrame:
-    labels_path = Path(labels_csv_path)
-    df = pd.read_csv(labels_path)
-    if "label" not in df.columns:
-        raise ValueError("labels.csv must contain 'label' column")
-
-    if "baseline_keep" not in df.columns:
-        if {"is_tiny", "is_suspicious_domain", "has_ui_keyword"}.issubset(df.columns):
-            proxy_reject = (
-                df["is_tiny"].fillna(False)
-                | df["is_suspicious_domain"].fillna(False)
-                | df["has_ui_keyword"].fillna(False)
-            )
-            y_pred = (~proxy_reject).astype(int)
-    else:
-        y_pred = df["baseline_keep"].fillna(False).astype(int)
-
-    y_true = df["label"].map({"content": 1, "non_content": 0}).fillna(0).astype(int)
-    return compute_classification_metrics(y_true=y_true, y_pred=y_pred)

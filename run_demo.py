@@ -40,7 +40,7 @@ def main() -> None:
     print(f"Page ID: {summary.get('page_id', '-')}")
     print(f"Найдено кандидатов: {summary.get('total_candidates', 0)}")
     print(f"Успешно скачано изображений: {summary.get('downloaded_ok', 0)}")
-    print(f"Отброшено baseline: {summary.get('baseline_rejected', 0)}")
+    print(f"Отброшено hard prefilter: {summary.get('hard_prefilter_rejected', 0)}")
     print(f"Передано в ML: {summary.get('ml_candidates', 0)}")
     print(f"Финально оставлено: {summary.get('final_kept', 0)}")
 
