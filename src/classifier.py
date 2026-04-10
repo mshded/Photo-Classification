@@ -37,9 +37,6 @@ CATEGORICAL_FEATURES = ["format"]
 
 def load_labeled_data(labels_csv_path: str = "data/labels.csv") -> pd.DataFrame:
     df = pd.read_csv(labels_csv_path)
-    if "label" not in df.columns:
-        raise ValueError("labels.csv must contain label column")
-
     out = df.copy()
     out["target"] = out["label"].map(LABEL_MAP)
     out = out[out["target"].isin([0, 1])].copy()
@@ -68,9 +65,6 @@ def load_labeled_data(labels_csv_path: str = "data/labels.csv") -> pd.DataFrame:
 
 
 def build_model_pipeline(model_type: str = "logreg") -> Pipeline:
-    if model_type != "logreg":
-        raise ValueError(f"Unsupported model_type: {model_type}")
-
     preprocessor = ColumnTransformer(
         transformers=[
             (
@@ -113,8 +107,6 @@ def save_model_artifacts(artifacts: dict[str, Any], model_path: str = "models/be
 
 def load_model_artifacts(model_path: str = "models/best_model.pkl") -> dict[str, Any]:
     target = Path(model_path)
-    if not target.exists():
-        raise FileNotFoundError(f"Model artifacts not found: {model_path}")
     return joblib.load(target)
 
 
@@ -122,16 +114,13 @@ def train_and_save_model(
     labels_csv_path: str = "data/labels.csv",
     model_path: str = "models/best_model.pkl",
     model_type: str = "logreg",
-) -> dict[str, Any]:
+    ) -> dict[str, Any]:
     df = load_labeled_data(labels_csv_path=labels_csv_path)
     features = build_ml_feature_frame(df)
 
     train_df = df[df["split"] == "train"].copy()
     val_df = df[df["split"] == "val"].copy()
     test_df = df[df["split"] == "test"].copy()
-
-    if train_df.empty or val_df.empty or test_df.empty:
-        raise ValueError("train/val/test splits must be non-empty")
 
     model = build_model_pipeline(model_type=model_type)
     model.fit(features.loc[train_df.index], train_df["target"])

@@ -23,12 +23,6 @@ def parse_args() -> argparse.Namespace:
         default="models/best_model.pkl",
         help="Path to model artifacts",
     )
-    parser.add_argument(
-        "--mode",
-        default="baseline_plus_ml",
-        choices=["baseline_only", "baseline_plus_ml"],
-        help="Filtering mode (default: baseline_plus_ml)",
-    )
     return parser.parse_args()
 
 
@@ -39,13 +33,11 @@ def main() -> None:
         url=args.url,
         output_dir=args.output_dir,
         raw_dir=args.raw_dir,
-        mode=args.mode,
         model_path=args.model_path,
     )
 
     print(f"URL страницы: {summary.get('page_url', args.url)}")
     print(f"Page ID: {summary.get('page_id', '-')}")
-    print(f"Режим: {summary.get('mode', args.mode)}")
     print(f"Найдено кандидатов: {summary.get('total_candidates', 0)}")
     print(f"Успешно скачано изображений: {summary.get('downloaded_ok', 0)}")
     print(f"Отброшено baseline: {summary.get('baseline_rejected', 0)}")

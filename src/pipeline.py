@@ -32,7 +32,7 @@ FINAL_KEEP_COLUMNS = [
 ]
 
 
-def _make_page_id(url: str) -> str:
+def make_page_id(url: str) -> str:
     parsed = urlparse(url)
     slug = parsed.path.strip("/").replace("/", "_") or "home"
     slug = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in slug)[:50]
@@ -40,7 +40,7 @@ def _make_page_id(url: str) -> str:
     return f"{host}_{slug}".strip("_")
 
 
-def _ensure_columns(df: pd.DataFrame, columns: List[str]) -> pd.DataFrame:
+def ensure_columns(df: pd.DataFrame, columns: List[str]) -> pd.DataFrame:
     out = df.copy()
     for col in columns:
         if col not in out.columns:
@@ -48,7 +48,7 @@ def _ensure_columns(df: pd.DataFrame, columns: List[str]) -> pd.DataFrame:
     return out
 
 
-def _write_page_info(
+def write_page_info(
     page_url: str,
     page_id: str,
     mode: str,
@@ -76,18 +76,14 @@ def prepare_candidates_dataframe(url: str, raw_dir: Path) -> pd.DataFrame:
     if df.empty:
         return df
 
-    page_id = _make_page_id(url)
+    page_id = make_page_id(url)
     raw_page_dir = raw_dir / page_id
 
     df = df.copy()
     df["page_id"] = page_id
     df["raw_page_dir"] = str(raw_page_dir)
-
-    # Make IDs stable and include page prefix for easier merges with labels
     df["candidate_id"] = [f"{page_id}_cand_{i:06d}" for i in range(len(df))]
-    df["local_file_name"] = df.apply(
-        lambda row: make_unique_filename(row["image_url"], row["candidate_id"]), axis=1
-    )
+    df["local_file_name"] = df.apply(lambda row: make_unique_filename(row["image_url"], row["candidate_id"]), axis=1)
     df["local_path"] = df["local_file_name"].apply(lambda f: str(raw_page_dir / f))
     return df
 
@@ -216,9 +212,7 @@ def apply_baseline_rules(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def apply_ml_filter(df: pd.DataFrame, model_path: str) -> pd.DataFrame:
-    # Import ML classifier lazily so baseline-only mode does not require sklearn deps.
     from src.classifier import load_model_artifacts, predict_proba
-
     out = df.copy()
     out["ml_score"] = pd.NA
     out["ml_pred"] = 0
@@ -295,14 +289,14 @@ def run_pipeline_for_url(
 ) -> Dict:
     output_root = Path(output_dir)
     raw_root = Path(raw_dir) if raw_dir else Path("data/raw")
-    page_id = _make_page_id(url)
+    page_id = make_page_id(url)
 
     page_output_dir = output_root / page_id
     page_output_dir.mkdir(parents=True, exist_ok=True)
     final_keep_dir = page_output_dir / "final_keep"
     final_keep_dir.mkdir(parents=True, exist_ok=True)
 
-    page_info = _write_page_info(
+    page_info = write_page_info(
         page_url=url,
         page_id=page_id,
         mode=mode,
@@ -324,20 +318,18 @@ def run_pipeline_for_url(
 
         summary = summarize_baseline_results(tmp_df)
         summary.update(
-            {
-                "page_url": url,
-                "page_id": page_id,
-                "mode": mode,
-                "saved_images": 0,
-                "top_reject_reasons": {},
-                "paths_to_saved_artifacts": {
-                    "page_info": str(page_output_dir / "page_info.json"),
-                    "candidates_csv": str(candidates_csv_path),
-                    "final_kept_csv": str(final_kept_csv_path),
-                    "run_log": str(run_log_path),
-                    "final_keep_dir": str(final_keep_dir),
+            {"page_url": url,
+             "page_id": page_id,
+             "mode": mode,
+             "saved_images": 0,
+             "top_reject_reasons": {},
+             "paths_to_saved_artifacts": {
+                 "page_info": str(page_output_dir / "page_info.json"),
+                 "candidates_csv": str(candidates_csv_path),
+                 "final_kept_csv": str(final_kept_csv_path),
+                 "run_log": str(run_log_path),
+                 "final_keep_dir": str(final_keep_dir),
                 },
-                "message": "No image candidates were found on the page.",
             }
         )
         run_log_path.write_text(
@@ -351,19 +343,13 @@ def run_pipeline_for_url(
     df = download_candidates(tmp_df, raw_root)
     df = enrich_with_image_metadata(df)
     df = apply_baseline_rules(df)
+    df = apply_ml_filter(df=df, model_path=model_path)
 
-    if mode == "baseline_plus_ml":
-        df = apply_ml_filter(df=df, model_path=model_path)
-    else:
-        df["ml_score"] = pd.NA
-        df["ml_pred"] = 0
-        df["final_keep"] = df["baseline_keep"].fillna(False)
-
-    df = _ensure_columns(df, FINAL_KEEP_COLUMNS)
+    df = ensure_columns(df, FINAL_KEEP_COLUMNS)
     df.to_csv(candidates_csv_path, index=False)
 
     final_kept_df = df[df["final_keep"].fillna(False)].copy()
-    final_kept_df = _ensure_columns(final_kept_df, FINAL_KEEP_COLUMNS)
+    final_kept_df = ensure_columns(final_kept_df, FINAL_KEEP_COLUMNS)
     final_kept_df[FINAL_KEEP_COLUMNS].to_csv(final_kept_csv_path, index=False)
 
     saved_images = save_positive_images(df, final_keep_dir, keep_col="final_keep")
@@ -384,9 +370,6 @@ def run_pipeline_for_url(
             },
         }
     )
-
-    if int(summary.get("final_kept", 0)) == 0:
-        summary["message"] = "Content images were not found after filtering."
 
     run_log_path.write_text(
         json.dumps(summary, ensure_ascii=False, indent=2),

@@ -35,7 +35,7 @@ def compute_classification_metrics(y_true: Iterable[int], y_pred: Iterable[int])
 
 def evaluate_model_on_split(
     y_true: Iterable[int], y_pred: Iterable[int], y_proba: Iterable[float] | None = None
-) -> Dict[str, float]:
+    ) -> Dict[str, float]:
     metrics = compute_classification_metrics(y_true=y_true, y_pred=y_pred)
     if y_proba is not None:
         proba_series = pd.Series(list(y_proba), dtype=float)
@@ -76,7 +76,7 @@ def select_threshold_for_precision(
     min_positive_predictions: int = 1,
     min_precision: float = 0.90,
     tie_breaker: str = "recall",
-) -> tuple[float, pd.DataFrame]:
+    ) -> tuple[float, pd.DataFrame]:
     metrics_table = build_threshold_metrics_table(y_true=y_true, y_proba=y_proba)
 
     tie_breaker = tie_breaker if tie_breaker in {"recall", "f1"} else "recall"
@@ -104,15 +104,11 @@ def select_threshold_for_precision(
 
 def evaluate_baseline_on_labels(labels_csv_path: str) -> Dict[str, float] | pd.DataFrame:
     labels_path = Path(labels_csv_path)
-    if not labels_path.exists():
-        raise FileNotFoundError(f"Labels file not found: {labels_csv_path}")
-
     df = pd.read_csv(labels_path)
     if "label" not in df.columns:
         raise ValueError("labels.csv must contain 'label' column")
 
     if "baseline_keep" not in df.columns:
-        # Lightweight fallback: evaluate proxy heuristic columns if baseline output is not merged yet.
         if {"is_tiny", "is_suspicious_domain", "has_ui_keyword"}.issubset(df.columns):
             proxy_reject = (
                 df["is_tiny"].fillna(False)
@@ -120,15 +116,6 @@ def evaluate_baseline_on_labels(labels_csv_path: str) -> Dict[str, float] | pd.D
                 | df["has_ui_keyword"].fillna(False)
             )
             y_pred = (~proxy_reject).astype(int)
-        else:
-            return pd.DataFrame(
-                [
-                    {
-                        "status": "baseline_keep column is missing",
-                        "hint": "merge baseline_results.csv with labels.csv by candidate_id/image_url/local_path",
-                    }
-                ]
-            )
     else:
         y_pred = df["baseline_keep"].fillna(False).astype(int)
 

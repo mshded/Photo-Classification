@@ -7,11 +7,11 @@
 ## Что делает пайплайн
 
 Для заданного URL пайплайн:
-1. Собирает кандидаты изображений из обычного HTML (`src/parser.py`, базово на `requests + BeautifulSoup`).
+1. Собирает кандидаты изображений из обычного HTML (`src/parser.py`, `requests + BeautifulSoup`).
 2. Скачивает кандидаты в `data/raw/<page_id>/`.
 3. Извлекает метаданные изображений (валидность, размеры, формат, aspect ratio и т.д.).
 4. Применяет baseline-фильтрацию (правила для отсечения явного мусора).
-5. В режиме `baseline_plus_ml` применяет ML-фильтр к baseline-кандидатам.
+5. Применяет ML-фильтр к baseline-кандидатам.
 6. Сохраняет финальные содержательные изображения и артефакты demo-запуска.
 
 Проект ориентирован на обычные HTML-сайты и простую подгрузку (без усложнений типа SPA-first/segmentation/OCR).
@@ -33,11 +33,9 @@ python run_train.py --labels_csv data/labels.csv --model_path models/best_model.
 ```bash
 python run_demo.py --url "https://example.com/page" --model_path models/best_model.pkl
 ```
-
-Дополнительные аргументы demo:
+Дополнительные аргументы run_demo:
 - `--output_dir` (по умолчанию `results/examples`)
 - `--raw_dir` (по умолчанию `data/raw`)
-- `--mode` (`baseline_only` или `baseline_plus_ml`, по умолчанию `baseline_plus_ml`)
 
 ## Артефакты demo-запуска
 

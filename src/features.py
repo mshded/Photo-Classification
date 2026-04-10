@@ -6,7 +6,6 @@ from urllib.parse import urlparse
 
 import pandas as pd
 
-# Conservative thresholds tuned for high precision
 MIN_WIDTH = 120
 MIN_HEIGHT = 120
 MIN_AREA = 20_000
@@ -89,7 +88,7 @@ def is_probable_tracking_pixel(
     file_size_bytes: Any,
     image_url: str,
     domain: str = "",
-) -> bool:
+    ) -> bool:
     try:
         w = float(width) if width is not None else None
         h = float(height) if height is not None else None
@@ -137,7 +136,6 @@ def _to_bool_series(series: pd.Series) -> pd.Series:
 
 
 def build_ml_feature_frame(df: pd.DataFrame) -> pd.DataFrame:
-    """Prepare tabular ML features using shared logic for train and inference."""
     work_df = df.copy()
 
     numeric_cols = ["width", "height", "area", "aspect_ratio", "file_size_bytes"]
@@ -200,5 +198,4 @@ def build_ml_feature_frame(df: pd.DataFrame) -> pd.DataFrame:
     base["has_suspicious_keyword"] = tracking_flags.apply(
         lambda x: int(bool(x["has_suspicious_keyword"]))
     )
-
     return base
