@@ -14,21 +14,19 @@ from src.features import (
     extract_url_flags,
     has_extreme_aspect_ratio,
     is_probable_tracking_pixel,
-    is_too_small,
 )
 from src.image_utils import download_image, get_image_metadata, make_unique_filename
 from src.parser import collect_image_candidates
-
 
 FINAL_KEEP_COLUMNS = [
     "candidate_id",
     "image_url",
     "local_path",
-    "final_keep",
+    "hard_prefilter_keep",
+    "hard_reject_reason",
     "ml_score",
     "ml_pred",
-    "baseline_keep",
-    "baseline_reject_reason",
+    "final_keep",
 ]
 
 
@@ -51,7 +49,6 @@ def ensure_columns(df: pd.DataFrame, columns: List[str]) -> pd.DataFrame:
 def write_page_info(
     page_url: str,
     page_id: str,
-    mode: str,
     model_path: str,
     raw_dir: Path,
     output_dir: Path,
@@ -59,7 +56,7 @@ def write_page_info(
     payload = {
         "page_url": page_url,
         "page_id": page_id,
-        "mode": mode,
+        "pipeline": "ml_with_hard_prefilter",
         "model_path": model_path,
         "raw_dir": str(raw_dir),
         "output_dir": str(output_dir),
@@ -134,7 +131,7 @@ def enrich_with_image_metadata(df: pd.DataFrame) -> pd.DataFrame:
     return pd.concat([out.reset_index(drop=True), pd.DataFrame(records)], axis=1)
 
 
-def apply_baseline_rules(df: pd.DataFrame) -> pd.DataFrame:
+def apply_hard_prefilter(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return df
 
@@ -153,73 +150,84 @@ def apply_baseline_rules(df: pd.DataFrame) -> pd.DataFrame:
         if not row.get("is_valid_image", False):
             flags.append("invalid_image")
 
+        width = row.get("width")
+        height = row.get("height")
+        area = row.get("area")
+        file_size_bytes = row.get("file_size_bytes")
+
+        try:
+            w = float(width) if width is not None else None
+            h = float(height) if height is not None else None
+        except (TypeError, ValueError):
+            w = h = None
+
+        if w is not None and h is not None and w <= 5 and h <= 5:
+            flags.append("tiny_dimensions_le_5")
+
+        if file_size_bytes is not None and pd.notna(file_size_bytes):
+            try:
+                if float(file_size_bytes) <= 512:
+                    flags.append("tiny_file_size")
+            except (TypeError, ValueError):
+                pass
+
         url_flags = extract_url_flags(
             row.get("image_url", ""),
             row.get("file_name", ""),
             row.get("alt_text", ""),
         )
-        if url_flags["has_suspicious_keyword"]:
-            flags.append("suspicious_keyword")
         if url_flags["has_tracking_hint"]:
             flags.append("tracking_url_hint")
 
         if is_probable_tracking_pixel(
-            row.get("width"),
-            row.get("height"),
-            row.get("file_size_bytes"),
+            width,
+            height,
+            file_size_bytes,
             row.get("image_url", ""),
             row.get("domain", ""),
         ):
             flags.append("probable_tracking_pixel")
 
-        if is_too_small(row.get("width"), row.get("height"), row.get("area")):
-            flags.append("too_small")
-
-        extreme_ar = has_extreme_aspect_ratio(row.get("aspect_ratio"))
-        if extreme_ar:
-            flags.append("extreme_aspect_ratio")
+        soft_flags = []
+        if has_extreme_aspect_ratio(row.get("aspect_ratio")):
+            soft_flags.append("extreme_aspect_ratio")
 
         image_url = row.get("image_url", "")
-        is_repeated = repeat_counts.get(image_url, 0) >= REPEATED_URL_THRESHOLD
-        if is_repeated:
-            flags.append("repeated_url")
+        if repeat_counts.get(image_url, 0) >= REPEATED_URL_THRESHOLD:
+            soft_flags.append("repeated_url")
+        if url_flags["has_suspicious_keyword"]:
+            soft_flags.append("ui_or_ads_keyword")
 
         hard_reject = {
             "download_failed",
             "invalid_image",
+            "tiny_dimensions_le_5",
+            "tiny_file_size",
             "probable_tracking_pixel",
-            "too_small",
             "tracking_url_hint",
         }
-        soft_reject = {
-            "suspicious_keyword",
-            "extreme_aspect_ratio",
-            "repeated_url",
-        }
 
-        has_hard = any(f in hard_reject for f in flags)
-        soft_count = sum(f in soft_reject for f in flags)
-        keep = not has_hard and soft_count == 0
-
+        keep = not any(f in hard_reject for f in flags)
         keeps.append(keep)
-        reasons.append("" if keep else ";".join(flags))
-        flags_col.append(json.dumps(flags, ensure_ascii=False))
+        reasons.append("" if keep else ";".join([f for f in flags if f in hard_reject]))
+        flags_col.append(json.dumps(flags + soft_flags, ensure_ascii=False))
 
-    out["baseline_keep"] = keeps
-    out["baseline_reject_reason"] = reasons
-    out["baseline_rule_flags"] = flags_col
+    out["hard_prefilter_keep"] = keeps
+    out["hard_reject_reason"] = reasons
+    out["hard_rule_flags"] = flags_col
     return out
 
 
 def apply_ml_filter(df: pd.DataFrame, model_path: str) -> pd.DataFrame:
     from src.classifier import load_model_artifacts, predict_proba
+
     out = df.copy()
     out["ml_score"] = pd.NA
     out["ml_pred"] = 0
 
-    ml_candidates_mask = out["baseline_keep"].fillna(False)
+    ml_candidates_mask = out["hard_prefilter_keep"].fillna(False)
     if not ml_candidates_mask.any():
-        out["final_keep"] = out["baseline_keep"].fillna(False)
+        out["final_keep"] = False
         return out
 
     artifacts = load_model_artifacts(model_path)
@@ -232,23 +240,22 @@ def apply_ml_filter(df: pd.DataFrame, model_path: str) -> pd.DataFrame:
 
     out.loc[ml_candidates_mask, "ml_score"] = scores.values
     out.loc[ml_candidates_mask, "ml_pred"] = preds.values
-    out["final_keep"] = out["baseline_keep"].fillna(False) & (out["ml_pred"] == 1)
+    out["final_keep"] = out["hard_prefilter_keep"].fillna(False) & (out["ml_pred"] == 1)
     return out
 
 
-def summarize_baseline_results(df: pd.DataFrame) -> Dict:
+def summarize_pipeline_results(df: pd.DataFrame) -> Dict:
     if df.empty:
         return {
             "total_candidates": 0,
             "downloaded_ok": 0,
-            "baseline_rejected": 0,
-            "baseline_kept": 0,
+            "hard_prefilter_rejected": 0,
             "ml_candidates": 0,
             "final_kept": 0,
             "top_reject_reasons": {},
         }
 
-    rejected = df.loc[~df["baseline_keep"], "baseline_reject_reason"].fillna("")
+    rejected = df.loc[~df["hard_prefilter_keep"], "hard_reject_reason"].fillna("")
     exploded = (
         rejected.str.split(";").explode().str.strip().replace("", pd.NA).dropna().value_counts()
     )
@@ -256,15 +263,14 @@ def summarize_baseline_results(df: pd.DataFrame) -> Dict:
     return {
         "total_candidates": int(len(df)),
         "downloaded_ok": int(df["download_ok"].fillna(False).sum()),
-        "baseline_rejected": int((~df["baseline_keep"]).sum()),
-        "baseline_kept": int(df["baseline_keep"].sum()),
-        "ml_candidates": int(df["baseline_keep"].fillna(False).sum()),
-        "final_kept": int(df.get("final_keep", df["baseline_keep"]).fillna(False).sum()),
+        "hard_prefilter_rejected": int((~df["hard_prefilter_keep"]).sum()),
+        "ml_candidates": int(df["hard_prefilter_keep"].fillna(False).sum()),
+        "final_kept": int(df["final_keep"].fillna(False).sum()),
         "top_reject_reasons": exploded.head(10).to_dict(),
     }
 
 
-def save_positive_images(df: pd.DataFrame, output_dir: Path, keep_col: str = "baseline_keep") -> int:
+def save_positive_images(df: pd.DataFrame, output_dir: Path, keep_col: str = "final_keep") -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
     kept_df = df[df[keep_col].fillna(False)].copy()
     copied = 0
@@ -284,7 +290,6 @@ def run_pipeline_for_url(
     url: str,
     output_dir: str,
     raw_dir: str | None = None,
-    mode: str = "baseline_only",
     model_path: str = "models/best_model.pkl",
 ) -> Dict:
     output_root = Path(output_dir)
@@ -299,7 +304,6 @@ def run_pipeline_for_url(
     page_info = write_page_info(
         page_url=url,
         page_id=page_id,
-        mode=mode,
         model_path=model_path,
         raw_dir=raw_root,
         output_dir=page_output_dir,
@@ -316,19 +320,19 @@ def run_pipeline_for_url(
         empty_candidates.to_csv(candidates_csv_path, index=False)
         empty_candidates.to_csv(final_kept_csv_path, index=False)
 
-        summary = summarize_baseline_results(tmp_df)
+        summary = summarize_pipeline_results(tmp_df)
         summary.update(
-            {"page_url": url,
-             "page_id": page_id,
-             "mode": mode,
-             "saved_images": 0,
-             "top_reject_reasons": {},
-             "paths_to_saved_artifacts": {
-                 "page_info": str(page_output_dir / "page_info.json"),
-                 "candidates_csv": str(candidates_csv_path),
-                 "final_kept_csv": str(final_kept_csv_path),
-                 "run_log": str(run_log_path),
-                 "final_keep_dir": str(final_keep_dir),
+            {
+                "page_url": url,
+                "page_id": page_id,
+                "saved_images": 0,
+                "top_reject_reasons": {},
+                "paths_to_saved_artifacts": {
+                    "page_info": str(page_output_dir / "page_info.json"),
+                    "candidates_csv": str(candidates_csv_path),
+                    "final_kept_csv": str(final_kept_csv_path),
+                    "run_log": str(run_log_path),
+                    "final_keep_dir": str(final_keep_dir),
                 },
             }
         )
@@ -342,7 +346,7 @@ def run_pipeline_for_url(
 
     df = download_candidates(tmp_df, raw_root)
     df = enrich_with_image_metadata(df)
-    df = apply_baseline_rules(df)
+    df = apply_hard_prefilter(df)
     df = apply_ml_filter(df=df, model_path=model_path)
 
     df = ensure_columns(df, FINAL_KEEP_COLUMNS)
@@ -354,12 +358,11 @@ def run_pipeline_for_url(
 
     saved_images = save_positive_images(df, final_keep_dir, keep_col="final_keep")
 
-    summary = summarize_baseline_results(df)
+    summary = summarize_pipeline_results(df)
     summary.update(
         {
             "page_url": url,
             "page_id": page_id,
-            "mode": mode,
             "saved_images": saved_images,
             "paths_to_saved_artifacts": {
                 "page_info": str(page_output_dir / "page_info.json"),

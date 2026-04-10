@@ -9,6 +9,8 @@ import pandas as pd
 MIN_WIDTH = 120
 MIN_HEIGHT = 120
 MIN_AREA = 20_000
+TINY_MAX_SIDE = 5
+TINY_MAX_AREA = 25
 MAX_EXTREME_ASPECT_RATIO = 5.0
 MIN_EXTREME_ASPECT_RATIO = 0.2
 TRACKING_MAX_SIDE = 3
@@ -119,6 +121,21 @@ def is_too_small(width: Any, height: Any, area: Any) -> bool:
     return False
 
 
+def is_tiny_image(width: Any, height: Any, area: Any) -> bool:
+    try:
+        w = float(width) if width is not None else None
+        h = float(height) if height is not None else None
+        a = float(area) if area is not None else None
+    except (TypeError, ValueError):
+        return False
+
+    if w is not None and h is not None and w <= TINY_MAX_SIDE and h <= TINY_MAX_SIDE:
+        return True
+    if a is not None and a <= TINY_MAX_AREA:
+        return True
+    return False
+
+
 def has_extreme_aspect_ratio(aspect_ratio: Any) -> bool:
     try:
         ar = float(aspect_ratio)
@@ -149,12 +166,9 @@ def build_ml_feature_frame(df: pd.DataFrame) -> pd.DataFrame:
             work_df[col] = ""
         work_df[col] = work_df[col].fillna("").astype(str)
 
-    if "is_tiny" in work_df.columns:
-        is_tiny = _to_bool_series(work_df["is_tiny"])
-    else:
-        is_tiny = work_df.apply(
-            lambda r: is_too_small(r.get("width"), r.get("height"), r.get("area")), axis=1
-        )
+    is_tiny = work_df.apply(
+        lambda r: is_tiny_image(r.get("width"), r.get("height"), r.get("area")), axis=1
+    )
 
     if "has_ui_keyword" in work_df.columns:
         has_ui_keyword = _to_bool_series(work_df["has_ui_keyword"])
