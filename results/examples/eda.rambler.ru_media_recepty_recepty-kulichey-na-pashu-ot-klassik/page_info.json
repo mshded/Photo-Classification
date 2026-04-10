@@ -1,0 +1,8 @@
+{
+  "page_url": "https://eda.rambler.ru/media/recepty/recepty-kulichey-na-pashu-ot-klassiki-do-bystryh-variantov",
+  "page_id": "eda.rambler.ru_media_recepty_recepty-kulichey-na-pashu-ot-klassik",
+  "pipeline": "ml_with_hard_prefilter",
+  "model_path": "models/best_model.pkl",
+  "raw_dir": "data\\raw",
+  "output_dir": "results\\examples\\eda.rambler.ru_media_recepty_recepty-kulichey-na-pashu-ot-klassik"
+}

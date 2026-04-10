@@ -12,13 +12,9 @@ venv/
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints/
 
-# Data
+# Data - ignore raw and interim only
 data/raw/
 data/interim/
-results/
-
-# Model artifacts
-models/
 
 # OS files
 .DS_Store

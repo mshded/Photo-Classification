@@ -1,0 +1,24 @@
+{
+  "total_candidates": 212,
+  "downloaded_ok": 212,
+  "hard_prefilter_rejected": 10,
+  "ml_candidates": 202,
+  "final_kept": 26,
+  "top_reject_reasons": {
+    "tiny_dimensions_le_5": 8,
+    "tiny_file_size": 8,
+    "tracking_url_hint": 8,
+    "probable_tracking_pixel": 8,
+    "invalid_image": 2
+  },
+  "page_url": "https://eda.rambler.ru/media/recepty/recepty-kulichey-na-pashu-ot-klassiki-do-bystryh-variantov",
+  "page_id": "eda.rambler.ru_media_recepty_recepty-kulichey-na-pashu-ot-klassik",
+  "saved_images": 26,
+  "paths_to_saved_artifacts": {
+    "page_info": "results\\examples\\eda.rambler.ru_media_recepty_recepty-kulichey-na-pashu-ot-klassik\\page_info.json",
+    "candidates_csv": "results\\examples\\eda.rambler.ru_media_recepty_recepty-kulichey-na-pashu-ot-klassik\\candidates.csv",
+    "final_kept_csv": "results\\examples\\eda.rambler.ru_media_recepty_recepty-kulichey-na-pashu-ot-klassik\\final_kept.csv",
+    "run_log": "results\\examples\\eda.rambler.ru_media_recepty_recepty-kulichey-na-pashu-ot-klassik\\run_log.json",
+    "final_keep_dir": "results\\examples\\eda.rambler.ru_media_recepty_recepty-kulichey-na-pashu-ot-klassik\\final_keep"
+  }
+}
