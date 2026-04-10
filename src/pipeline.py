@@ -178,6 +178,8 @@ def apply_hard_prefilter(df: pd.DataFrame) -> pd.DataFrame:
         )
         if url_flags["has_tracking_hint"]:
             flags.append("tracking_url_hint")
+        if url_flags["has_suspicious_keyword"]:
+            flags.append("ui_or_ads_keyword")
 
         if is_probable_tracking_pixel(
             width,
