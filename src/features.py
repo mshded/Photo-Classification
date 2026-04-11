@@ -42,10 +42,16 @@ TRACKING_PATTERNS = (
     "analytics",
     "counter",
     "track",
+    "tracking",
     "pixel",
     "metrics",
     "watch",
     "collect",
+    "gtm",
+    "googletagmanager",
+    "doubleclick",
+    "mc.yandex",
+    "tns-counter",
 )
 
 
@@ -77,11 +83,19 @@ def extract_url_flags(image_url: str, file_name: str = "", alt_text: str = "") -
     return {
         "has_suspicious_keyword": has_suspicious,
         "has_tracking_hint": has_tracking_hint,
+        "has_hard_block_keyword": has_suspicious_keyword(image_url, file_name),
         "url_path": parsed.path,
         "url_query": parsed.query,
         "normalized_file_name": normalized_file_name,
         "normalized_alt_text": normalized_alt,
     }
+
+
+def has_analytics_url_hint(image_url: str, domain: str = "") -> bool:
+    haystack = normalize_text_for_match(f"{domain} {image_url}")
+    if not haystack:
+        return False
+    return any(token in haystack for token in TRACKING_PATTERNS)
 
 
 def is_probable_tracking_pixel(

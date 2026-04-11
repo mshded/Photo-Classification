@@ -9,9 +9,11 @@ from urllib.parse import urlparse
 
 import pandas as pd
 
+from src.classifier import normalize_local_path
 from src.features import (
     REPEATED_URL_THRESHOLD,
     extract_url_flags,
+    has_analytics_url_hint,
     has_extreme_aspect_ratio,
     is_probable_tracking_pixel,
 )
@@ -93,7 +95,7 @@ def download_candidates(df: pd.DataFrame, raw_dir: Path) -> pd.DataFrame:
     statuses: List[Dict[str, str]] = []
 
     for _, row in out.iterrows():
-        local_path = Path(row["local_path"])
+        local_path = Path(normalize_local_path(row["local_path"]))
         ok, err = download_image(row["image_url"], local_path)
         statuses.append({"download_ok": ok, "download_error": err})
 
@@ -125,7 +127,7 @@ def enrich_with_image_metadata(df: pd.DataFrame) -> pd.DataFrame:
             )
             continue
 
-        meta = get_image_metadata(Path(row["local_path"]))
+        meta = get_image_metadata(Path(normalize_local_path(row["local_path"])))
         records.append(meta)
 
     return pd.concat([out.reset_index(drop=True), pd.DataFrame(records)], axis=1)
@@ -163,11 +165,15 @@ def apply_hard_prefilter(df: pd.DataFrame) -> pd.DataFrame:
 
         if w is not None and h is not None and w <= 5 and h <= 5:
             flags.append("tiny_dimensions_le_5")
+        if w is not None and h is not None and w <= 32 and h <= 32:
+            flags.append("very_small_dimensions_le_32")
 
         if file_size_bytes is not None and pd.notna(file_size_bytes):
             try:
                 if float(file_size_bytes) <= 512:
                     flags.append("tiny_file_size")
+                if float(file_size_bytes) <= 2048:
+                    flags.append("very_small_file_size")
             except (TypeError, ValueError):
                 pass
 
@@ -178,8 +184,10 @@ def apply_hard_prefilter(df: pd.DataFrame) -> pd.DataFrame:
         )
         if url_flags["has_tracking_hint"]:
             flags.append("tracking_url_hint")
-        if url_flags["has_suspicious_keyword"]:
+        if url_flags["has_hard_block_keyword"]:
             flags.append("ui_or_ads_keyword")
+        if has_analytics_url_hint(row.get("image_url", ""), row.get("domain", "")):
+            flags.append("analytics_url_hint")
 
         if is_probable_tracking_pixel(
             width,
@@ -205,8 +213,11 @@ def apply_hard_prefilter(df: pd.DataFrame) -> pd.DataFrame:
             "invalid_image",
             "tiny_dimensions_le_5",
             "tiny_file_size",
+            "very_small_dimensions_le_32",
+            "analytics_url_hint",
             "probable_tracking_pixel",
             "tracking_url_hint",
+            "ui_or_ads_keyword",
         }
 
         keep = not any(f in hard_reject for f in flags)
@@ -278,7 +289,7 @@ def save_positive_images(df: pd.DataFrame, output_dir: Path, keep_col: str = "fi
     copied = 0
 
     for _, row in kept_df.iterrows():
-        src = Path(row["local_path"])
+        src = Path(normalize_local_path(row["local_path"]))
         if not src.exists():
             continue
         dst = output_dir / src.name

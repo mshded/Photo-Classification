@@ -3,17 +3,20 @@
   "downloaded_ok": 212,
   "hard_prefilter_rejected": 10,
   "ml_candidates": 202,
-  "final_kept": 26,
+  "final_kept": 6,
   "top_reject_reasons": {
     "tiny_dimensions_le_5": 8,
+    "very_small_dimensions_le_32": 8,
     "tiny_file_size": 8,
     "tracking_url_hint": 8,
+    "analytics_url_hint": 8,
     "probable_tracking_pixel": 8,
+    "ui_or_ads_keyword": 5,
     "invalid_image": 2
   },
   "page_url": "https://eda.rambler.ru/media/recepty/recepty-kulichey-na-pashu-ot-klassiki-do-bystryh-variantov",
   "page_id": "eda.rambler.ru_media_recepty_recepty-kulichey-na-pashu-ot-klassik",
-  "saved_images": 26,
+  "saved_images": 6,
   "paths_to_saved_artifacts": {
     "page_info": "results\\examples\\eda.rambler.ru_media_recepty_recepty-kulichey-na-pashu-ot-klassik\\page_info.json",
     "candidates_csv": "results\\examples\\eda.rambler.ru_media_recepty_recepty-kulichey-na-pashu-ot-klassik\\candidates.csv",

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -34,6 +35,22 @@ NUMERIC_FEATURES = [
     "has_suspicious_keyword",
 ]
 CATEGORICAL_FEATURES = ["format"]
+SIZE_QUERY_KEYS = {
+    "w",
+    "h",
+    "width",
+    "height",
+    "size",
+    "sz",
+    "dpr",
+    "quality",
+    "q",
+    "crop",
+    "fit",
+    "resize",
+}
+RESIZE_TOKEN_RE = re.compile(r"(?<![a-z0-9])\d{2,4}x\d{2,4}(?![a-z0-9])")
+EXT_RE = re.compile(r"\.(jpe?g|png|webp|gif|bmp|tiff?)$", flags=re.IGNORECASE)
 
 
 def _normalize_image_url(image_url: str) -> str:
@@ -44,11 +61,45 @@ def _normalize_image_url(image_url: str) -> str:
     return urlunsplit((parsed.scheme.lower(), parsed.netloc.lower(), parsed.path, query, ""))
 
 
-def _content_hash_from_local_path(local_path: str) -> str | None:
+def _project_root() -> Path:
+    return Path(__file__).resolve().parents[1]
+
+
+def normalize_local_path(local_path: str | Path | None) -> str:
     if not local_path or pd.isna(local_path):
+        return ""
+
+    text = str(local_path).strip().replace("\\", "/")
+    lowered = text.lower()
+    marker = "/data/"
+    marker_idx = lowered.find(marker)
+    if marker_idx >= 0:
+        text = text[marker_idx + 1 :]
+
+    cleaned = Path(text)
+    try:
+        if cleaned.is_absolute():
+            return cleaned.resolve().relative_to(_project_root().resolve()).as_posix()
+    except Exception:
+        return cleaned.as_posix()
+    return cleaned.as_posix()
+
+
+def _to_existing_path(local_path: str | Path | None) -> Path | None:
+    normalized = normalize_local_path(local_path)
+    if not normalized:
         return None
-    path = Path(str(local_path))
-    if not path.exists() or not path.is_file():
+    candidate = Path(normalized)
+    if not candidate.is_absolute():
+        candidate = _project_root() / candidate
+    if candidate.exists() and candidate.is_file():
+        return candidate
+    return None
+
+
+def _content_hash_from_local_path(local_path: str) -> str | None:
+    path = _to_existing_path(local_path)
+    if path is None:
         return None
 
     digest = hashlib.sha1()
@@ -58,9 +109,31 @@ def _content_hash_from_local_path(local_path: str) -> str | None:
     return digest.hexdigest()
 
 
+def _canonicalize_for_grouping(image_url: str) -> str:
+    if not image_url:
+        return ""
+    parsed = urlsplit(str(image_url).strip())
+    path = parsed.path or ""
+    path = RESIZE_TOKEN_RE.sub("", path)
+    path = re.sub(r"/{2,}", "/", path)
+    path = EXT_RE.sub("", path)
+    path = path.rstrip("/")
+
+    query_pairs = []
+    for key, value in parse_qsl(parsed.query, keep_blank_values=True):
+        if key.lower() in SIZE_QUERY_KEYS:
+            continue
+        query_pairs.append((key.lower(), value))
+    query = urlencode(sorted(query_pairs))
+    return urlunsplit((parsed.scheme.lower(), parsed.netloc.lower(), path.lower(), query, ""))
+
+
 def build_group_id(df: pd.DataFrame) -> pd.Series:
     content_hash = df.get("local_path", pd.Series(index=df.index, dtype="object")).apply(_content_hash_from_local_path)
 
+    canonical_url = df.get("image_url", pd.Series(index=df.index, dtype="object")).fillna("").astype(str).apply(
+        _canonicalize_for_grouping
+    )
     normalized_url = df.get("image_url", pd.Series(index=df.index, dtype="object")).fillna("").astype(str).apply(
         _normalize_image_url
     )
@@ -68,6 +141,7 @@ def build_group_id(df: pd.DataFrame) -> pd.Series:
 
     group_id = content_hash.copy()
     group_id = group_id.fillna("")
+    group_id = group_id.where(group_id.str.len() > 0, canonical_url)
     group_id = group_id.where(group_id.str.len() > 0, normalized_url)
     group_id = group_id.where(group_id.str.len() > 0, page_url)
     group_id = group_id.where(group_id.str.len() > 0, df.index.astype(str))
@@ -105,6 +179,8 @@ def load_labeled_data(
 ) -> pd.DataFrame:
     df = pd.read_csv(labels_csv_path)
     out = df.copy()
+    if "local_path" in out.columns:
+        out["local_path"] = out["local_path"].apply(normalize_local_path)
     out["target"] = out["label"].map(LABEL_MAP)
     out = out[out["target"].isin([0, 1])].copy()
 
@@ -196,7 +272,7 @@ def train_and_save_model(
         "model_type": model_type,
         "numeric_features": NUMERIC_FEATURES,
         "categorical_features": CATEGORICAL_FEATURES,
-        "split_strategy": "group_split(content_hash->normalized_image_url->page_url)",
+        "split_strategy": "group_split(content_hash->canonical_image_id->normalized_image_url->page_url)",
     }
     save_model_artifacts(artifacts=artifacts, model_path=model_path)
 
