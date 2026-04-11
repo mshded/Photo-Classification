@@ -16,6 +16,10 @@ venv/
 data/raw/
 data/interim/
 
+# Local training/demo artifacts
+models/
+results/
+
 # OS files
 .DS_Store
 Thumbs.db
