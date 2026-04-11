@@ -31,4 +31,8 @@ results/examples/
 
 # Optional cache/temp files
 *.log
+<<<<<<< HEAD
 *.tmp
+=======
+*.tmp
+>>>>>>> 1d8f48ed8017dec727f1208e3300bd80338bc839

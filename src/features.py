@@ -38,6 +38,7 @@ SUSPICIOUS_KEYWORDS = {
     "thumb",
 }
 
+<<<<<<< HEAD
 TRACKING_PATTERNS = (
     "analytics",
     "counter",
@@ -53,6 +54,23 @@ TRACKING_PATTERNS = (
     "mc.yandex",
     "tns-counter",
 )
+=======
+TRACKING_PATTERNS = (
+    "analytics",
+    "counter",
+    "track",
+    "tracking",
+    "pixel",
+    "metrics",
+    "watch",
+    "collect",
+    "gtm",
+    "googletagmanager",
+    "doubleclick",
+    "mc.yandex",
+    "tns-counter",
+)
+>>>>>>> 1d8f48ed8017dec727f1208e3300bd80338bc839
 
 
 def normalize_text_for_match(text: str | None) -> str:
@@ -80,6 +98,7 @@ def extract_url_flags(image_url: str, file_name: str = "", alt_text: str = "") -
     has_tracking_hint = any(p in normalized_url for p in TRACKING_PATTERNS)
     has_suspicious = has_suspicious_keyword(image_url, file_name, alt_text)
 
+<<<<<<< HEAD
     return {
         "has_suspicious_keyword": has_suspicious,
         "has_tracking_hint": has_tracking_hint,
@@ -89,6 +108,24 @@ def extract_url_flags(image_url: str, file_name: str = "", alt_text: str = "") -
         "normalized_file_name": normalized_file_name,
         "normalized_alt_text": normalized_alt,
     }
+=======
+    return {
+        "has_suspicious_keyword": has_suspicious,
+        "has_tracking_hint": has_tracking_hint,
+        "has_hard_block_keyword": has_suspicious_keyword(image_url, file_name),
+        "url_path": parsed.path,
+        "url_query": parsed.query,
+        "normalized_file_name": normalized_file_name,
+        "normalized_alt_text": normalized_alt,
+    }
+
+
+def has_analytics_url_hint(image_url: str, domain: str = "") -> bool:
+    haystack = normalize_text_for_match(f"{domain} {image_url}")
+    if not haystack:
+        return False
+    return any(token in haystack for token in TRACKING_PATTERNS)
+>>>>>>> 1d8f48ed8017dec727f1208e3300bd80338bc839
 
 
 def has_analytics_url_hint(image_url: str, domain: str = "") -> bool:
