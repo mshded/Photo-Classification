@@ -12,17 +12,23 @@ venv/
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints/
 
-# Data - ignore raw and interim only
-data/raw/
-data/interim/
-
-# Local training/demo artifacts
-models/
-results/
-
 # OS files
 .DS_Store
 Thumbs.db
 
 # VS Code settings
 .vscode/
+
+# Data 
+data/raw/
+data/interim/
+
+# Models
+models/
+
+# Results
+results/examples/
+
+# Optional cache/temp files
+*.log
+*.tmp
