@@ -43,6 +43,7 @@ def main() -> None:
     print(f"Отброшено hard prefilter: {summary.get('hard_prefilter_rejected', 0)}")
     print(f"Передано в ML: {summary.get('ml_candidates', 0)}")
     print(f"Финально оставлено: {summary.get('final_kept', 0)}")
+    print(f"Удалено финальной дедупликацией: {summary.get('final_dedup_removed', 0)}")
 
     if summary.get("total_candidates", 0) == 0:
         print("Сообщение: на странице не найдено кандидатов изображений.")

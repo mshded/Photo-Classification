@@ -13,7 +13,8 @@
 4. Применяет встроенный **hard prefilter** для явного технического мусора (tracking/analytics, tiny pixel,
    logo/icon/banner/avatar/sprite/counter/pixel URL-сигналы и т.п.).
 5. Для оставшихся кандидатов считает ML-score и применяет порог из сохранённых артефактов модели.
-6. Сохраняет только `final_keep` изображения и артефакты demo-запуска.
+6. Выполняет финальную дедупликацию содержательных изображений (по content hash, а при его отсутствии — по канонизированному image URL без resize-токенов и расширения).
+7. Сохраняет только `final_keep` изображения и артефакты demo-запуска.
 
 > В проекте нет user-facing baseline режима: используется один ML pipeline
 > с детерминированным hard prefilter до модели.
@@ -24,7 +25,7 @@
 pip install -r requirements.txt
 ```
 
-## Обучение модели (канонический путь)
+## Обучение модели 
 
 Обучение и анализ метрик выполняются в ноутбуке:
 
@@ -58,9 +59,8 @@ pip install -r requirements.txt
 ## Запуск demo
 
 ```bash
-python run_demo.py --url "https://example.com/page"
+python run_demo.py --url "https://example.com" --model_path models/best_model.pkl
 ```
-
 Дополнительные аргументы `run_demo.py`:
 - `--output_dir` (по умолчанию `results/examples`)
 - `--raw_dir` (по умолчанию `data/raw`)

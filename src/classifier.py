@@ -33,8 +33,21 @@ NUMERIC_FEATURES = [
     "has_extreme_aspect_ratio",
     "has_tracking_hint",
     "has_suspicious_keyword",
+    "has_hard_block_keyword",
+    "repeated_url_count",
+    "alt_text_length",
+    "file_name_length",
+    "url_depth",
+    "is_large_image",
+    "has_descriptive_alt",
 ]
-CATEGORICAL_FEATURES = ["format"]
+CATEGORICAL_FEATURES = ["format", "source_attr"]
+
+# Более мягкая настройка, чтобы модель лучше находила content, но не теряла precision полностью.
+THRESHOLD_MIN_PRECISION = 0.80
+THRESHOLD_MIN_POSITIVE_PREDICTIONS = 3
+THRESHOLD_TIE_BREAKER = "f1"
+
 SIZE_QUERY_KEYS = {
     "w",
     "h",
@@ -221,7 +234,12 @@ def build_model_pipeline(model_type: str = "logreg") -> Pipeline:
         ]
     )
 
-    model = LogisticRegression(max_iter=1000, random_state=42, class_weight="balanced")
+    model = LogisticRegression(
+        max_iter=1500,
+        random_state=42,
+        class_weight="balanced",
+        C=0.7,
+    )
     return Pipeline(steps=[("preprocessor", preprocessor), ("model", model)])
 
 
@@ -257,11 +275,16 @@ def train_and_save_model(
     model.fit(features.loc[train_df.index], train_df["target"])
 
     val_proba = pd.Series(model.predict_proba(features.loc[val_df.index])[:, 1], index=val_df.index)
-    threshold, threshold_table = select_threshold_for_precision(val_df["target"], val_proba)
+    threshold, threshold_table = select_threshold_for_precision(
+        val_df["target"],
+        val_proba,
+        min_positive_predictions=THRESHOLD_MIN_POSITIVE_PREDICTIONS,
+        min_precision=THRESHOLD_MIN_PRECISION,
+        tie_breaker=THRESHOLD_TIE_BREAKER,
+    )
 
-    train_pred = (
-        pd.Series(model.predict_proba(features.loc[train_df.index])[:, 1], index=train_df.index) >= threshold
-    ).astype(int)
+    train_proba = pd.Series(model.predict_proba(features.loc[train_df.index])[:, 1], index=train_df.index)
+    train_pred = (train_proba >= threshold).astype(int)
     val_pred = (val_proba >= threshold).astype(int)
     test_proba = pd.Series(model.predict_proba(features.loc[test_df.index])[:, 1], index=test_df.index)
     test_pred = (test_proba >= threshold).astype(int)
@@ -273,12 +296,17 @@ def train_and_save_model(
         "numeric_features": NUMERIC_FEATURES,
         "categorical_features": CATEGORICAL_FEATURES,
         "split_strategy": "group_split(content_hash->canonical_image_id->normalized_image_url->page_url)",
+        "threshold_selection": {
+            "min_precision": THRESHOLD_MIN_PRECISION,
+            "min_positive_predictions": THRESHOLD_MIN_POSITIVE_PREDICTIONS,
+            "tie_breaker": THRESHOLD_TIE_BREAKER,
+        },
     }
     save_model_artifacts(artifacts=artifacts, model_path=model_path)
 
     return {
         "threshold": float(threshold),
-        "train_metrics": evaluate_model_on_split(train_df["target"], train_pred),
+        "train_metrics": evaluate_model_on_split(train_df["target"], train_pred, train_proba),
         "val_metrics": evaluate_model_on_split(val_df["target"], val_pred, val_proba),
         "test_metrics": evaluate_model_on_split(test_df["target"], test_pred, test_proba),
         "threshold_table": threshold_table,

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import re
 import shutil
 from collections import Counter
 from pathlib import Path
 from typing import Dict, List
-from urllib.parse import urlparse
+from urllib.parse import parse_qsl, urlencode, urlparse, urlsplit, urlunsplit
 
 import pandas as pd
 
@@ -31,6 +33,23 @@ FINAL_KEEP_COLUMNS = [
     "final_keep",
 ]
 
+SIZE_QUERY_KEYS = {
+    "w",
+    "h",
+    "width",
+    "height",
+    "size",
+    "sz",
+    "dpr",
+    "quality",
+    "q",
+    "crop",
+    "fit",
+    "resize",
+}
+RESIZE_TOKEN_RE = re.compile(r"(?<![a-z0-9])\d{2,4}x\d{2,4}(?![a-z0-9])")
+EXT_RE = re.compile(r"\.(jpe?g|png|webp|gif|bmp|tiff?)$", flags=re.IGNORECASE)
+
 
 def make_page_id(url: str) -> str:
     parsed = urlparse(url)
@@ -48,6 +67,56 @@ def ensure_columns(df: pd.DataFrame, columns: List[str]) -> pd.DataFrame:
     return out
 
 
+def _content_hash_for_path(local_path: str | None) -> str:
+    normalized = normalize_local_path(local_path)
+    if not normalized:
+        return ""
+
+    path = Path(normalized)
+    if not path.is_absolute():
+        path = Path.cwd() / path
+    if not path.exists() or not path.is_file():
+        return ""
+
+    digest = hashlib.sha1()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _canonicalize_image_url(image_url: str) -> str:
+    if not image_url:
+        return ""
+
+    parsed = urlsplit(str(image_url).strip())
+    path = parsed.path or ""
+    path = RESIZE_TOKEN_RE.sub("", path)
+    path = re.sub(r"/{2,}", "/", path)
+    path = EXT_RE.sub("", path)
+    path = path.rstrip("/")
+
+    query_pairs = []
+    for key, value in parse_qsl(parsed.query, keep_blank_values=True):
+        if key.lower() in SIZE_QUERY_KEYS:
+            continue
+        query_pairs.append((key.lower(), value))
+    query = urlencode(sorted(query_pairs))
+    return urlunsplit((parsed.scheme.lower(), parsed.netloc.lower(), path.lower(), query, ""))
+
+
+def _build_final_dedup_key(row: pd.Series) -> str:
+    content_hash = _content_hash_for_path(row.get("local_path"))
+    if content_hash:
+        return f"sha1:{content_hash}"
+
+    canonical_url = _canonicalize_image_url(str(row.get("image_url", "")))
+    if canonical_url:
+        return f"url:{canonical_url}"
+
+    return f"candidate:{row.get('candidate_id', '')}"
+
+
 def write_page_info(
     page_url: str,
     page_id: str,
@@ -58,7 +127,7 @@ def write_page_info(
     payload = {
         "page_url": page_url,
         "page_id": page_id,
-        "pipeline": "ml_with_hard_prefilter",
+        "pipeline": "ml_with_hard_prefilter_and_final_dedup",
         "model_path": model_path,
         "raw_dir": str(raw_dir),
         "output_dir": str(output_dir),
@@ -206,7 +275,7 @@ def apply_hard_prefilter(df: pd.DataFrame) -> pd.DataFrame:
         if repeat_counts.get(image_url, 0) >= REPEATED_URL_THRESHOLD:
             soft_flags.append("repeated_url")
         if url_flags["has_suspicious_keyword"]:
-            soft_flags.append("ui_or_ads_keyword")
+            soft_flags.append("ui_or_ads_keyword_soft")
 
         hard_reject = {
             "download_failed",
@@ -257,6 +326,42 @@ def apply_ml_filter(df: pd.DataFrame, model_path: str) -> pd.DataFrame:
     return out
 
 
+def apply_final_deduplication(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return df
+
+    out = df.copy()
+    out["final_keep_before_dedup"] = out["final_keep"].fillna(False)
+    out["final_dedup_key"] = ""
+    out["final_dedup_rank"] = pd.NA
+    out["removed_by_final_dedup"] = False
+
+    kept_mask = out["final_keep_before_dedup"].fillna(False)
+    if not kept_mask.any():
+        return out
+
+    kept = out.loc[kept_mask].copy()
+    kept["final_dedup_key"] = kept.apply(_build_final_dedup_key, axis=1)
+    area_series = kept["area"] if "area" in kept.columns else pd.Series(index=kept.index, dtype="float64")
+    file_size_series = kept["file_size_bytes"] if "file_size_bytes" in kept.columns else pd.Series(index=kept.index, dtype="float64")
+    ml_score_series = kept["ml_score"] if "ml_score" in kept.columns else pd.Series(index=kept.index, dtype="float64")
+    kept["area_sort"] = pd.to_numeric(area_series, errors="coerce").fillna(-1)
+    kept["file_size_sort"] = pd.to_numeric(file_size_series, errors="coerce").fillna(-1)
+    kept["ml_score_sort"] = pd.to_numeric(ml_score_series, errors="coerce").fillna(-1)
+
+    kept = kept.sort_values(
+        by=["final_dedup_key", "ml_score_sort", "area_sort", "file_size_sort", "candidate_id"],
+        ascending=[True, False, False, False, True],
+    )
+    kept["final_dedup_rank"] = kept.groupby("final_dedup_key").cumcount() + 1
+
+    out.loc[kept.index, "final_dedup_key"] = kept["final_dedup_key"]
+    out.loc[kept.index, "final_dedup_rank"] = kept["final_dedup_rank"]
+    out.loc[kept.index, "removed_by_final_dedup"] = kept["final_dedup_rank"] > 1
+    out.loc[kept.index, "final_keep"] = kept["final_dedup_rank"] == 1
+    return out
+
+
 def summarize_pipeline_results(df: pd.DataFrame) -> Dict:
     if df.empty:
         return {
@@ -265,6 +370,7 @@ def summarize_pipeline_results(df: pd.DataFrame) -> Dict:
             "hard_prefilter_rejected": 0,
             "ml_candidates": 0,
             "final_kept": 0,
+            "final_dedup_removed": 0,
             "top_reject_reasons": {},
         }
 
@@ -273,12 +379,15 @@ def summarize_pipeline_results(df: pd.DataFrame) -> Dict:
         rejected.str.split(";").explode().str.strip().replace("", pd.NA).dropna().value_counts()
     )
 
+    dedup_removed = int(df.get("removed_by_final_dedup", pd.Series(False, index=df.index)).fillna(False).sum())
+
     return {
         "total_candidates": int(len(df)),
         "downloaded_ok": int(df["download_ok"].fillna(False).sum()),
         "hard_prefilter_rejected": int((~df["hard_prefilter_keep"]).sum()),
         "ml_candidates": int(df["hard_prefilter_keep"].fillna(False).sum()),
         "final_kept": int(df["final_keep"].fillna(False).sum()),
+        "final_dedup_removed": dedup_removed,
         "top_reject_reasons": exploded.head(10).to_dict(),
     }
 
@@ -361,6 +470,7 @@ def run_pipeline_for_url(
     df = enrich_with_image_metadata(df)
     df = apply_hard_prefilter(df)
     df = apply_ml_filter(df=df, model_path=model_path)
+    df = apply_final_deduplication(df)
 
     df = ensure_columns(df, FINAL_KEEP_COLUMNS)
     df.to_csv(candidates_csv_path, index=False)
