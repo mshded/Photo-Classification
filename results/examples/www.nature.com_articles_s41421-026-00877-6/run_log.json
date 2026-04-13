@@ -1,0 +1,29 @@
+{
+  "total_candidates": 22,
+  "downloaded_ok": 20,
+  "hard_prefilter_rejected": 5,
+  "ml_candidates": 17,
+  "final_kept": 11,
+  "final_dedup_removed": 0,
+  "top_reject_reasons": {
+    "invalid_image": 4,
+    "ui_or_ads_keyword": 3,
+    "download_failed": 2,
+    "tracking_url_hint": 2,
+    "analytics_url_hint": 2,
+    "tiny_dimensions_le_5": 1,
+    "very_small_dimensions_le_32": 1,
+    "tiny_file_size": 1,
+    "probable_tracking_pixel": 1
+  },
+  "page_url": "https://www.nature.com/articles/s41421-026-00877-6",
+  "page_id": "www.nature.com_articles_s41421-026-00877-6",
+  "saved_images": 11,
+  "paths_to_saved_artifacts": {
+    "page_info": "results\\examples\\www.nature.com_articles_s41421-026-00877-6\\page_info.json",
+    "candidates_csv": "results\\examples\\www.nature.com_articles_s41421-026-00877-6\\candidates.csv",
+    "final_kept_csv": "results\\examples\\www.nature.com_articles_s41421-026-00877-6\\final_kept.csv",
+    "run_log": "results\\examples\\www.nature.com_articles_s41421-026-00877-6\\run_log.json",
+    "final_keep_dir": "results\\examples\\www.nature.com_articles_s41421-026-00877-6\\final_keep"
+  }
+}

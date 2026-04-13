@@ -1,0 +1,8 @@
+{
+  "page_url": "https://www.nature.com/articles/s41421-026-00877-6",
+  "page_id": "www.nature.com_articles_s41421-026-00877-6",
+  "pipeline": "ml_with_hard_prefilter_and_final_dedup",
+  "model_path": "models/best_model.pkl",
+  "raw_dir": "data\\raw",
+  "output_dir": "results\\examples\\www.nature.com_articles_s41421-026-00877-6"
+}
