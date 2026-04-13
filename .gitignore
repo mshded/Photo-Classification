@@ -23,12 +23,6 @@ Thumbs.db
 data/raw/
 data/interim/
 
-# Models
-models/
-
-# Results
-results/examples/
-
 # Optional cache/temp files
 *.log
 *.tmp

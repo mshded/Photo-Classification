@@ -3,7 +3,7 @@
   "downloaded_ok": 20,
   "hard_prefilter_rejected": 5,
   "ml_candidates": 17,
-  "final_kept": 11,
+  "final_kept": 15,
   "final_dedup_removed": 0,
   "top_reject_reasons": {
     "invalid_image": 4,
@@ -18,7 +18,7 @@
   },
   "page_url": "https://www.nature.com/articles/s41421-026-00877-6",
   "page_id": "www.nature.com_articles_s41421-026-00877-6",
-  "saved_images": 11,
+  "saved_images": 15,
   "paths_to_saved_artifacts": {
     "page_info": "results\\examples\\www.nature.com_articles_s41421-026-00877-6\\page_info.json",
     "candidates_csv": "results\\examples\\www.nature.com_articles_s41421-026-00877-6\\candidates.csv",
