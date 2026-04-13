@@ -105,14 +105,22 @@ def _canonicalize_image_url(image_url: str) -> str:
     return urlunsplit((parsed.scheme.lower(), parsed.netloc.lower(), path.lower(), query, ""))
 
 
-def _build_final_dedup_key(row: pd.Series) -> str:
+def _build_semantic_dedup_key(row: pd.Series) -> str:
+    canonical_url = _canonicalize_image_url(str(row.get("image_url", "")))
+    if canonical_url:
+        return f"semantic:{canonical_url}"
+
     content_hash = _content_hash_for_path(row.get("local_path"))
     if content_hash:
         return f"sha1:{content_hash}"
 
-    canonical_url = _canonicalize_image_url(str(row.get("image_url", "")))
-    if canonical_url:
-        return f"url:{canonical_url}"
+    return f"candidate:{row.get('candidate_id', '')}"
+
+
+def _build_exact_binary_key(row: pd.Series) -> str:
+    content_hash = _content_hash_for_path(row.get("local_path"))
+    if content_hash:
+        return f"sha1:{content_hash}"
 
     return f"candidate:{row.get('candidate_id', '')}"
 
@@ -341,24 +349,39 @@ def apply_final_deduplication(df: pd.DataFrame) -> pd.DataFrame:
         return out
 
     kept = out.loc[kept_mask].copy()
-    kept["final_dedup_key"] = kept.apply(_build_final_dedup_key, axis=1)
-    area_series = kept["area"] if "area" in kept.columns else pd.Series(index=kept.index, dtype="float64")
-    file_size_series = kept["file_size_bytes"] if "file_size_bytes" in kept.columns else pd.Series(index=kept.index, dtype="float64")
-    ml_score_series = kept["ml_score"] if "ml_score" in kept.columns else pd.Series(index=kept.index, dtype="float64")
-    kept["area_sort"] = pd.to_numeric(area_series, errors="coerce").fillna(-1)
-    kept["file_size_sort"] = pd.to_numeric(file_size_series, errors="coerce").fillna(-1)
-    kept["ml_score_sort"] = pd.to_numeric(ml_score_series, errors="coerce").fillna(-1)
-
+    kept["ml_score_sort"] = pd.to_numeric(kept.get("ml_score"), errors="coerce").fillna(-1.0)
+    kept["area_sort"] = pd.to_numeric(kept.get("area"), errors="coerce").fillna(-1.0)
+    kept["file_size_sort"] = pd.to_numeric(kept.get("file_size_bytes"), errors="coerce").fillna(-1.0)
+    kept["semantic_dedup_key"] = kept.apply(_build_semantic_dedup_key, axis=1)
     kept = kept.sort_values(
-        by=["final_dedup_key", "ml_score_sort", "area_sort", "file_size_sort", "candidate_id"],
+        by=["semantic_dedup_key", "ml_score_sort", "area_sort", "file_size_sort", "candidate_id"],
         ascending=[True, False, False, False, True],
     )
-    kept["final_dedup_rank"] = kept.groupby("final_dedup_key").cumcount() + 1
+    kept["semantic_rank"] = kept.groupby("semantic_dedup_key").cumcount() + 1
+    semantic_winners = kept[kept["semantic_rank"] == 1].copy()
+    semantic_winners["exact_binary_key"] = semantic_winners.apply(_build_exact_binary_key, axis=1)
+    semantic_winners = semantic_winners.sort_values(
+        by=["exact_binary_key", "ml_score_sort", "area_sort", "file_size_sort", "candidate_id"],
+        ascending=[True, False, False, False, True],
+    )
+    semantic_winners["exact_rank"] = semantic_winners.groupby("exact_binary_key").cumcount() + 1
+    final_winners = semantic_winners[semantic_winners["exact_rank"] == 1].copy()
 
-    out.loc[kept.index, "final_dedup_key"] = kept["final_dedup_key"]
-    out.loc[kept.index, "final_dedup_rank"] = kept["final_dedup_rank"]
-    out.loc[kept.index, "removed_by_final_dedup"] = kept["final_dedup_rank"] > 1
-    out.loc[kept.index, "final_keep"] = kept["final_dedup_rank"] == 1
+    out.loc[kept.index, "final_dedup_key"] = kept["semantic_dedup_key"]
+    out.loc[kept.index, "final_dedup_rank"] = kept["semantic_rank"]
+
+    out.loc[kept.index, "removed_by_final_dedup"] = True
+    out.loc[kept.index, "final_keep"] = False
+
+    out.loc[final_winners.index, "removed_by_final_dedup"] = False
+    out.loc[final_winners.index, "final_keep"] = True
+
+    out.loc[final_winners.index, "final_dedup_rank"] = 1
+
+    out["final_dedup_reason"] = ""
+    out.loc[kept.index, "final_dedup_reason"] = "semantic_duplicate_removed"
+    out.loc[final_winners.index, "final_dedup_reason"] = ""
+
     return out
 
 
