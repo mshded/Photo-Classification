@@ -24,7 +24,7 @@
 - `src/image_utils.py` — скачивание изображений и извлечение метаданных.
 - `src/features.py` — генерация фичей и эвристики.
 - `src/classifier.py` — обучение/загрузка модели и логика порога.
-- `src/pipeline.py` — orchestration всего процесса и сохранение артефактов.
+- `src/pipeline.py` — оркестрация всего процесса и сохранение артефактов.
 - `src/metrics.py` — расчет метрик.
 - `data/labels.csv` — размеченный датасет.
 - `notebooks/01_dataset_collection.ipynb` — сбор датасета.
@@ -84,7 +84,7 @@ python run_demo.py --url "https://example.com" --model_path models/best_model.pk
 
 ## Модель
 
-- Модель: логистическая регрессия (scikit-learn pipeline).
+- Модель: логистическая регрессия.
 - Используется group-aware split, чтобы снизить утечки между train/val/test.
 - Порог вероятности подбирается на `val` с фокусом на precision.
 - В inference используется сохраненный порог из `best_model.pkl`.
