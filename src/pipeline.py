@@ -50,6 +50,15 @@ SIZE_QUERY_KEYS = {
 RESIZE_TOKEN_RE = re.compile(r"(?<![a-z0-9])\d{2,4}x\d{2,4}(?![a-z0-9])")
 EXT_RE = re.compile(r"\.(jpe?g|png|webp|gif|bmp|tiff?)$", flags=re.IGNORECASE)
 
+RENDER_QUERY_KEYS = {
+    "as", "fm", "format", "auto", "s", "quality", "q", "fit", "crop", "resize"
+}
+
+SIZE_SEGMENT_RE = re.compile(
+    r"^(?:w\d+h\d+|h\d+w\d+|w\d+|h\d+|iw\d+|ih\d+|lw\d+|lh\d+)$",
+    flags=re.IGNORECASE,
+)
+
 
 def make_page_id(url: str) -> str:
     parsed = urlparse(url)
@@ -85,25 +94,49 @@ def _content_hash_for_path(local_path: str | None) -> str:
     return digest.hexdigest()
 
 
+# def _canonicalize_image_url(image_url: str) -> str:
+#     if not image_url:
+#         return ""
+
+#     parsed = urlsplit(str(image_url).strip())
+#     path = parsed.path or ""
+#     path = RESIZE_TOKEN_RE.sub("", path)
+#     path = re.sub(r"/{2,}", "/", path)
+#     path = EXT_RE.sub("", path)
+#     path = path.rstrip("/")
+
+#     query_pairs = []
+#     for key, value in parse_qsl(parsed.query, keep_blank_values=True):
+#         if key.lower() in SIZE_QUERY_KEYS:
+#             continue
+#         query_pairs.append((key.lower(), value))
+#     query = urlencode(sorted(query_pairs))
+#     return urlunsplit((parsed.scheme.lower(), parsed.netloc.lower(), path.lower(), query, ""))
+
 def _canonicalize_image_url(image_url: str) -> str:
     if not image_url:
         return ""
 
     parsed = urlsplit(str(image_url).strip())
-    path = parsed.path or ""
+
+    parts = [p for p in (parsed.path or "").split("/") if p]
+    parts = [p for p in parts if not SIZE_SEGMENT_RE.fullmatch(p)]
+    path = "/" + "/".join(parts) if parts else ""
+
     path = RESIZE_TOKEN_RE.sub("", path)
     path = re.sub(r"/{2,}", "/", path)
     path = EXT_RE.sub("", path)
-    path = path.rstrip("/")
+    path = path.rstrip("/").lower()
 
     query_pairs = []
     for key, value in parse_qsl(parsed.query, keep_blank_values=True):
-        if key.lower() in SIZE_QUERY_KEYS:
+        key_l = key.lower()
+        if key_l in SIZE_QUERY_KEYS or key_l in RENDER_QUERY_KEYS:
             continue
-        query_pairs.append((key.lower(), value))
-    query = urlencode(sorted(query_pairs))
-    return urlunsplit((parsed.scheme.lower(), parsed.netloc.lower(), path.lower(), query, ""))
+        query_pairs.append((key_l, value))
 
+    query = urlencode(sorted(query_pairs))
+    return urlunsplit((parsed.scheme.lower(), parsed.netloc.lower(), path, query, ""))
 
 def _build_semantic_dedup_key(row: pd.Series) -> str:
     canonical_url = _canonicalize_image_url(str(row.get("image_url", "")))

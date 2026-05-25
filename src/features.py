@@ -196,6 +196,80 @@ def _to_bool_series(series: pd.Series) -> pd.Series:
     return text.isin({"1", "true", "yes", "y", "t"})
 
 
+# def build_ml_feature_frame(df: pd.DataFrame) -> pd.DataFrame:
+#     work_df = df.copy()
+
+#     numeric_cols = ["width", "height", "area", "aspect_ratio", "file_size_bytes"]
+#     for col in numeric_cols:
+#         if col not in work_df.columns:
+#             work_df[col] = pd.NA
+#         work_df[col] = pd.to_numeric(work_df[col], errors="coerce")
+
+#     for col in ["format", "image_url", "file_name", "alt_text", "domain", "source_attr"]:
+#         if col not in work_df.columns:
+#             work_df[col] = ""
+#         work_df[col] = work_df[col].fillna("").astype(str)
+
+#     is_tiny = work_df.apply(
+#         lambda r: is_tiny_image(r.get("width"), r.get("height"), r.get("area")), axis=1
+#     )
+
+#     if "has_ui_keyword" in work_df.columns:
+#         has_ui_keyword = _to_bool_series(work_df["has_ui_keyword"])
+#     else:
+#         has_ui_keyword = work_df.apply(
+#             lambda r: has_suspicious_keyword(r.get("image_url", ""), r.get("file_name", ""), r.get("alt_text", "")),
+#             axis=1,
+#         )
+
+#     if "is_suspicious_domain" in work_df.columns:
+#         is_suspicious_domain = _to_bool_series(work_df["is_suspicious_domain"])
+#     else:
+#         is_suspicious_domain = work_df["domain"].str.contains("analytics|ad|tracker|pixel", case=False, regex=True)
+
+#     tracking_flags = work_df.apply(
+#         lambda r: extract_url_flags(r.get("image_url", ""), r.get("file_name", ""), r.get("alt_text", "")),
+#         axis=1,
+#     )
+
+#     repeated_url_counts = work_df["image_url"].fillna("").map(work_df["image_url"].fillna("").value_counts())
+#     alt_text_len = work_df["alt_text"].str.len().fillna(0)
+#     file_name_len = work_df["file_name"].str.len().fillna(0)
+#     url_depth = work_df["image_url"].apply(lambda x: len([p for p in urlparse(x).path.split("/") if p]))
+
+#     base = pd.DataFrame(
+#         {
+#             "width": work_df["width"],
+#             "height": work_df["height"],
+#             "area": work_df["area"],
+#             "aspect_ratio": work_df["aspect_ratio"],
+#             "file_size_bytes": work_df["file_size_bytes"],
+#             "format": work_df["format"].str.lower().replace("", "unknown"),
+#             "source_attr": work_df["source_attr"].replace("", "unknown"),
+#             "is_tiny": is_tiny.astype(int),
+#             "is_suspicious_domain": is_suspicious_domain.astype(int),
+#             "has_ui_keyword": has_ui_keyword.astype(int),
+#             "has_tracking_hint": tracking_flags.apply(lambda x: int(bool(x["has_tracking_hint"]))),
+#             "has_suspicious_keyword": tracking_flags.apply(lambda x: int(bool(x["has_suspicious_keyword"]))),
+#             "has_hard_block_keyword": tracking_flags.apply(lambda x: int(bool(x["has_hard_block_keyword"]))),
+#             "repeated_url_count": repeated_url_counts.fillna(0).astype(float),
+#             "alt_text_length": alt_text_len.astype(float),
+#             "file_name_length": file_name_len.astype(float),
+#             "url_depth": url_depth.astype(float),
+#         }
+#     )
+
+#     base["is_too_small"] = base.apply(
+#         lambda r: int(is_too_small(r["width"], r["height"], r["area"])), axis=1
+#     )
+#     base["has_extreme_aspect_ratio"] = base["aspect_ratio"].apply(
+#         lambda x: int(has_extreme_aspect_ratio(x))
+#     )
+#     base["is_large_image"] = ((base["width"] >= 240) & (base["height"] >= 240) & (base["area"] >= 60_000)).astype(int)
+#     base["has_descriptive_alt"] = (base["alt_text_length"] >= 10).astype(int)
+
+#     return base
+
 def build_ml_feature_frame(df: pd.DataFrame) -> pd.DataFrame:
     work_df = df.copy()
 
@@ -211,31 +285,34 @@ def build_ml_feature_frame(df: pd.DataFrame) -> pd.DataFrame:
         work_df[col] = work_df[col].fillna("").astype(str)
 
     is_tiny = work_df.apply(
-        lambda r: is_tiny_image(r.get("width"), r.get("height"), r.get("area")), axis=1
-    )
-
-    if "has_ui_keyword" in work_df.columns:
-        has_ui_keyword = _to_bool_series(work_df["has_ui_keyword"])
-    else:
-        has_ui_keyword = work_df.apply(
-            lambda r: has_suspicious_keyword(r.get("image_url", ""), r.get("file_name", ""), r.get("alt_text", "")),
-            axis=1,
-        )
-
-    if "is_suspicious_domain" in work_df.columns:
-        is_suspicious_domain = _to_bool_series(work_df["is_suspicious_domain"])
-    else:
-        is_suspicious_domain = work_df["domain"].str.contains("analytics|ad|tracker|pixel", case=False, regex=True)
-
-    tracking_flags = work_df.apply(
-        lambda r: extract_url_flags(r.get("image_url", ""), r.get("file_name", ""), r.get("alt_text", "")),
+        lambda r: is_tiny_image(r.get("width"), r.get("height"), r.get("area")),
         axis=1,
     )
 
-    repeated_url_counts = work_df["image_url"].fillna("").map(work_df["image_url"].fillna("").value_counts())
+    tracking_flags = work_df.apply(
+        lambda r: extract_url_flags(
+            r.get("image_url", ""),
+            r.get("file_name", ""),
+            r.get("alt_text", ""),
+        ),
+        axis=1,
+    )
+
+    has_ui_keyword = tracking_flags.apply(lambda x: int(bool(x["has_suspicious_keyword"])))
+
+    is_suspicious_domain = work_df.apply(
+        lambda r: int(has_analytics_url_hint(r.get("image_url", ""), r.get("domain", ""))),
+        axis=1,
+    )
+
+    repeated_url_counts = work_df["image_url"].fillna("").map(
+        work_df["image_url"].fillna("").value_counts()
+    )
     alt_text_len = work_df["alt_text"].str.len().fillna(0)
     file_name_len = work_df["file_name"].str.len().fillna(0)
-    url_depth = work_df["image_url"].apply(lambda x: len([p for p in urlparse(x).path.split("/") if p]))
+    url_depth = work_df["image_url"].apply(
+        lambda x: len([p for p in urlparse(x).path.split("/") if p])
+    )
 
     base = pd.DataFrame(
         {
@@ -260,12 +337,17 @@ def build_ml_feature_frame(df: pd.DataFrame) -> pd.DataFrame:
     )
 
     base["is_too_small"] = base.apply(
-        lambda r: int(is_too_small(r["width"], r["height"], r["area"])), axis=1
+        lambda r: int(is_too_small(r["width"], r["height"], r["area"])),
+        axis=1,
     )
     base["has_extreme_aspect_ratio"] = base["aspect_ratio"].apply(
         lambda x: int(has_extreme_aspect_ratio(x))
     )
-    base["is_large_image"] = ((base["width"] >= 240) & (base["height"] >= 240) & (base["area"] >= 60_000)).astype(int)
+    base["is_large_image"] = (
+        (base["width"] >= 240) &
+        (base["height"] >= 240) &
+        (base["area"] >= 60_000)
+    ).astype(int)
     base["has_descriptive_alt"] = (base["alt_text_length"] >= 10).astype(int)
 
     return base

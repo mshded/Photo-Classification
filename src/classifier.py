@@ -160,10 +160,44 @@ def build_group_id(df: pd.DataFrame) -> pd.Series:
     group_id = group_id.where(group_id.str.len() > 0, df.index.astype(str))
     return group_id.astype(str)
 
+def build_page_group_id(df: pd.DataFrame) -> pd.Series:
+    if "page_stub" in df.columns and df["page_stub"].fillna("").astype(str).str.len().gt(0).any():
+        return df["page_stub"].fillna("").astype(str)
 
+    if "page_id" in df.columns and df["page_id"].fillna("").astype(str).str.len().gt(0).any():
+        return df["page_id"].fillna("").astype(str)
+
+    if "page_url" in df.columns and df["page_url"].fillna("").astype(str).str.len().gt(0).any():
+        return df["page_url"].fillna("").astype(str)
+
+    return build_group_id(df)
+
+# def _assign_group_splits(df: pd.DataFrame, random_state: int = 42) -> pd.DataFrame:
+#     out = df.copy()
+#     groups = build_group_id(out)
+
+#     gss_test = GroupShuffleSplit(n_splits=1, test_size=0.2, random_state=random_state)
+#     train_val_idx, test_idx = next(gss_test.split(out, out["target"], groups=groups))
+
+#     train_val_df = out.iloc[train_val_idx].copy()
+#     train_val_groups = groups.iloc[train_val_idx]
+
+#     gss_val = GroupShuffleSplit(n_splits=1, test_size=0.25, random_state=random_state)
+#     train_rel_idx, val_rel_idx = next(
+#         gss_val.split(train_val_df, train_val_df["target"], groups=train_val_groups)
+#     )
+
+#     train_idx = train_val_df.index[train_rel_idx]
+#     val_idx = train_val_df.index[val_rel_idx]
+#     test_abs_idx = out.index[test_idx]
+
+#     out["split"] = "train"
+#     out.loc[val_idx, "split"] = "val"
+#     out.loc[test_abs_idx, "split"] = "test"
+#     return out
 def _assign_group_splits(df: pd.DataFrame, random_state: int = 42) -> pd.DataFrame:
     out = df.copy()
-    groups = build_group_id(out)
+    groups = build_page_group_id(out)
 
     gss_test = GroupShuffleSplit(n_splits=1, test_size=0.2, random_state=random_state)
     train_val_idx, test_idx = next(gss_test.split(out, out["target"], groups=groups))
@@ -184,7 +218,6 @@ def _assign_group_splits(df: pd.DataFrame, random_state: int = 42) -> pd.DataFra
     out.loc[val_idx, "split"] = "val"
     out.loc[test_abs_idx, "split"] = "test"
     return out
-
 
 def load_labeled_data(
     labels_csv_path: str = "data/labels.csv",

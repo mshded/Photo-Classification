@@ -84,7 +84,8 @@ python run_demo.py --url "https://example.com" --model_path models/best_model.pk
 
 ## Модель
 
-- Модель: логистическая регрессия.
+- Модель: логистическая регрессия (scikit-learn pipeline).
+>>>>>>> 814729f (Auto commit tracked changes before push)
 - Используется group-aware split, чтобы снизить утечки между train/val/test.
 - Порог вероятности подбирается на `val` с фокусом на precision.
 - В inference используется сохраненный порог из `best_model.pkl`.
