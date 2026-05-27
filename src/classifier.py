@@ -197,7 +197,7 @@ def build_page_group_id(df: pd.DataFrame) -> pd.Series:
 #     return out
 def _assign_group_splits(df: pd.DataFrame, random_state: int = 42) -> pd.DataFrame:
     out = df.copy()
-    groups = build_page_group_id(out)
+    groups = build_group_id(out)
 
     gss_test = GroupShuffleSplit(n_splits=1, test_size=0.2, random_state=random_state)
     train_val_idx, test_idx = next(gss_test.split(out, out["target"], groups=groups))
@@ -239,10 +239,19 @@ def load_labeled_data(
     else:
         out = _assign_group_splits(out, random_state=42)
 
-    validate_no_page_leakage(out)
+    validate_no_duplicate_leakage(out)
     return out
 
 
+
+
+def validate_no_duplicate_leakage(df: pd.DataFrame) -> None:
+    splits = {name: set(build_group_id(df[df["split"] == name]).astype(str)) for name in ["train", "val", "test"]}
+    pairs = [("train", "val"), ("train", "test"), ("val", "test")]
+    for a,b in pairs:
+        inter = (splits[a] & splits[b]) - {""}
+        if inter:
+            raise ValueError(f"Duplicate leakage detected between {a} and {b}: {sorted(list(inter))[:5]}")
 
 
 def validate_no_page_leakage(df: pd.DataFrame) -> None:
@@ -255,7 +264,7 @@ def validate_no_page_leakage(df: pd.DataFrame) -> None:
 
 
 def build_split_assignment(df: pd.DataFrame) -> pd.DataFrame:
-    page_group = build_page_group_id(df).astype(str)
+    page_group = build_group_id(df).astype(str)
     return pd.DataFrame({
         "row_id": df.index.astype(str),
         "page_group": page_group,
@@ -350,7 +359,7 @@ def train_and_save_model(
         "model_type": model_type,
         "numeric_features": NUMERIC_FEATURES,
         "categorical_features": CATEGORICAL_FEATURES,
-        "split_strategy": "page_level_group_split(page_stub->page_id->page_url)",
+        "split_strategy": "duplicate_safe_group_split(content_hash->canonical_image_url->normalized_image_url)",
         "threshold_selection": {
             "min_precision": THRESHOLD_MIN_PRECISION,
             "min_positive_predictions": THRESHOLD_MIN_POSITIVE_PREDICTIONS,
