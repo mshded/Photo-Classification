@@ -76,16 +76,29 @@ TRACKING_PATTERNS = (
 )
 
 
-def normalize_text_for_match(text: str | None) -> str:
+def safe_str(value: Any) -> str:
+    """Convert None/NaN to empty string and any other value to str."""
+    if value is None:
+        return ""
+    try:
+        if pd.isna(value):
+            return ""
+    except Exception:
+        pass
+    return str(value)
+
+
+def normalize_text_for_match(text: Any) -> str:
+    text = safe_str(text)
     if not text:
         return ""
-    normalized = str(text).lower()
+    normalized = text.lower()
     normalized = re.sub(r"[^a-z0-9]+", " ", normalized)
     return " ".join(normalized.split())
 
 
 def _has_any_keyword(keywords: set[str], *parts: str | None) -> bool:
-    merged = normalize_text_for_match(" ".join([p or "" for p in parts]))
+    merged = normalize_text_for_match(" ".join([safe_str(p) for p in parts]))
     if not merged:
         return False
     tokens = set(merged.split())
@@ -208,7 +221,7 @@ def _to_bool_series(series: pd.Series) -> pd.Series:
 #     for col in ["format", "image_url", "file_name", "alt_text", "domain", "source_attr"]:
 #         if col not in work_df.columns:
 #             work_df[col] = ""
-#         work_df[col] = work_df[col].fillna("").astype(str)
+#         work_df[col] = work_df[col].apply(safe_str)
 
 #     is_tiny = work_df.apply(
 #         lambda r: is_tiny_image(r.get("width"), r.get("height"), r.get("area")), axis=1
@@ -282,7 +295,7 @@ def build_ml_feature_frame(df: pd.DataFrame) -> pd.DataFrame:
     for col in ["format", "image_url", "file_name", "alt_text", "domain", "source_attr"]:
         if col not in work_df.columns:
             work_df[col] = ""
-        work_df[col] = work_df[col].fillna("").astype(str)
+        work_df[col] = work_df[col].apply(safe_str)
 
     is_tiny = work_df.apply(
         lambda r: is_tiny_image(r.get("width"), r.get("height"), r.get("area")),
