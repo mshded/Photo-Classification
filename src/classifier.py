@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import re
 from pathlib import Path
 from typing import Any
@@ -98,30 +97,6 @@ def normalize_local_path(local_path: str | Path | None) -> str:
     return cleaned.as_posix()
 
 
-def _to_existing_path(local_path: str | Path | None) -> Path | None:
-    normalized = normalize_local_path(local_path)
-    if not normalized:
-        return None
-    candidate = Path(normalized)
-    if not candidate.is_absolute():
-        candidate = _project_root() / candidate
-    if candidate.exists() and candidate.is_file():
-        return candidate
-    return None
-
-
-def _content_hash_from_local_path(local_path: str) -> str | None:
-    path = _to_existing_path(local_path)
-    if path is None:
-        return None
-
-    digest = hashlib.sha1()
-    with path.open("rb") as f:
-        for chunk in iter(lambda: f.read(8192), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
 def _canonicalize_for_grouping(image_url: str) -> str:
     if not image_url:
         return ""
@@ -142,23 +117,28 @@ def _canonicalize_for_grouping(image_url: str) -> str:
 
 
 def build_group_id(df: pd.DataFrame) -> pd.Series:
-    content_hash = df.get("local_path", pd.Series(index=df.index, dtype="object")).apply(_content_hash_from_local_path)
-
-    canonical_url = df.get("image_url", pd.Series(index=df.index, dtype="object")).fillna("").astype(str).apply(
-        _canonicalize_for_grouping
+    image_url = (
+        df.get("image_url", pd.Series("", index=df.index, dtype="object"))
+        .fillna("")
+        .astype(str)
     )
-    normalized_url = df.get("image_url", pd.Series(index=df.index, dtype="object")).fillna("").astype(str).apply(
-        _normalize_image_url
-    )
-    page_url = df.get("page_url", pd.Series(index=df.index, dtype="object")).fillna("").astype(str)
 
-    group_id = content_hash.copy()
-    group_id = group_id.fillna("")
-    group_id = group_id.where(group_id.str.len() > 0, canonical_url)
+    canonical_url = image_url.apply(_canonicalize_for_grouping)
+    normalized_url = image_url.apply(_normalize_image_url)
+
+    candidate_id = (
+        df.get("candidate_id", pd.Series("", index=df.index, dtype="object"))
+        .fillna("")
+        .astype(str)
+    )
+
+    group_id = canonical_url.copy()
     group_id = group_id.where(group_id.str.len() > 0, normalized_url)
-    group_id = group_id.where(group_id.str.len() > 0, page_url)
+    group_id = group_id.where(group_id.str.len() > 0, candidate_id)
     group_id = group_id.where(group_id.str.len() > 0, df.index.astype(str))
+
     return group_id.astype(str)
+
 
 def build_page_group_id(df: pd.DataFrame) -> pd.Series:
     if "page_stub" in df.columns and df["page_stub"].fillna("").astype(str).str.len().gt(0).any():
@@ -171,6 +151,8 @@ def build_page_group_id(df: pd.DataFrame) -> pd.Series:
         return df["page_url"].fillna("").astype(str)
 
     return build_group_id(df)
+
+
 
 # def _assign_group_splits(df: pd.DataFrame, random_state: int = 42) -> pd.DataFrame:
 #     out = df.copy()
@@ -359,7 +341,7 @@ def train_and_save_model(
         "model_type": model_type,
         "numeric_features": NUMERIC_FEATURES,
         "categorical_features": CATEGORICAL_FEATURES,
-        "split_strategy": "duplicate_safe_group_split(content_hash->canonical_image_url->normalized_image_url)",
+        "split_strategy": "duplicate_safe_group_split(canonical_image_url->normalized_image_url->candidate_id)",
         "threshold_selection": {
             "min_precision": THRESHOLD_MIN_PRECISION,
             "min_positive_predictions": THRESHOLD_MIN_POSITIVE_PREDICTIONS,

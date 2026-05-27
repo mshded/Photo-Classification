@@ -36,18 +36,14 @@
 ## Модель
 - `LogisticRegression` на metadata/URL features.
 - `hard prefilter` перед ML для явного технического мусора.
-- Подбор threshold только на validation (precision-oriented + контроль числа positive predictions).
-- Финальная deduplication в demo pipeline.
+- Подбор threshold только на validation.
+- Финальная дедупликация в demo pipeline.
 
 ## Артефакты обучения (из `notebooks/03_training.ipynb`)
 - `models/best_model.pkl`
 - `results/metrics.csv`
 - `results/threshold_metrics.csv`
 - `results/split_assignment.csv`
-- `results/pipeline_metrics.csv`
-- `results/page_holdout_stress_metrics.csv`
-- `results/page_holdout_stress_split_assignment.csv`
-- `results/page_holdout_stress_threshold_metrics.csv`
 
 ## Запуск
 ```bash

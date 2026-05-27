@@ -1,9 +1,12 @@
 import pandas as pd
-
+import sys
+from pathlib import Path
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
 from src.metrics import compute_classification_metrics
 from src.parser import extract_img_candidates_from_html, deduplicate_candidates
 from src.features import build_ml_feature_frame, is_probable_tracking_pixel
-from src.classifier import _assign_group_splits
+from src.classifier import _assign_group_splits, build_group_id
 
 
 def test_metrics_smoke():
@@ -46,3 +49,25 @@ def test_duplicate_urls():
 
     duplicate_rows = split_df.iloc[[0, 1]]
     assert duplicate_rows["split"].nunique() == 1
+
+def test_group_id(tmp_path):
+    existing_file = tmp_path / "downloaded_image.jpg"
+    existing_file.write_bytes(b"some binary image bytes")
+
+    df = pd.DataFrame(
+        {
+            "candidate_id": ["img_small", "img_large"],
+            "image_url": [
+                "https://cdn.example.org/products/shoes/main.jpg?w=200&q=60",
+                "https://cdn.example.org/products/shoes/main.webp?w=800&q=90",
+            ],
+            "local_path": [
+                str(existing_file),
+                "data/raw/missing_image.webp",
+            ],
+        }
+    )
+
+    group_ids = build_group_id(df)
+
+    assert group_ids.iloc[0] == group_ids.iloc[1]
