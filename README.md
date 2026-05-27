@@ -1,53 +1,113 @@
 # Photo-Classification
 
-## Постановка задачи
-Проект фильтрует изображения страницы на два класса:
-- `content`: фото, изображения/карточки товаров, обложки и содержательные иллюстрации.
-- `non_content`: иконки, логотипы, кнопки, декоративные UI-элементы, баннеры, tracking/technical изображения.
+Учебный MVP для фильтрации изображений веб-страницы. По URL система собирает изображения-кандидаты, отбрасывает технический и интерфейсный мусор и сохраняет содержательные изображения локально.
 
-Классификация выполняется для **целого изображения**. Основная метрика: **precision** (вместе с recall/F1/accuracy и confusion matrix).
+## Постановка задачи
+
+Проект решает задачу бинарной классификации целых изображений:
+
+- `content` — фотографии, изображения/карточки товаров, обложки статей и содержательные иллюстрации;
+- `non_content` — иконки, логотипы, кнопки, декоративные UI-элементы, рекламные баннеры и tracking/technical изображения.
+
+Это **не** задача сегментации: изображение сохраняется или отбрасывается целиком. Основная метрика — **precision**; вместе с ней контролируются `recall`, `F1-score`, `accuracy` и confusion matrix.
 
 ## Архитектура
-`URL -> parser -> candidates -> download -> metadata/features -> hard prefilter -> ML classifier -> deduplication -> final_keep/`
+
+`URL → parser → candidates → download → metadata/features → hard prefilter → ML classifier → deduplication → final_keep/`
+
+1. `src/parser.py` извлекает URL изображений из HTML и простых lazy-loading атрибутов.
+2. `src/image_utils.py` скачивает изображения и получает технические метаданные.
+3. `src/features.py` строит metadata/URL-признаки и устойчиво обрабатывает пропуски.
+4. `src/pipeline.py` удаляет явный технический мусор, применяет модель и финальную дедупликацию.
+5. `src/classifier.py` обучает `LogisticRegression` и сохраняет выбранный на validation порог.
 
 ## Структура репозитория
-- `notebooks/01_dataset_collection.ipynb` — сбор/разметка (без добавления новых данных на финальном этапе).
-- `notebooks/02_eda.ipynb` — EDA и анализ распределений.
-- `notebooks/03_training.ipynb` — **единственный** сценарий обучения/оценки/сохранения артефактов.
-- `run_demo.py` — end-to-end demo уже обученной модели.
-- `src/` — parser/features/classifier/pipeline/metrics.
-- `data/labels.csv` — фиксированный датасет.
-- `models/best_model.pkl` — артефакт модели.
-- `results/*.csv` — артефакты оценки (main + stress-test).
+
+- `notebooks/01_dataset_collection.ipynb` — сбор и разметка датасета;
+- `notebooks/02_eda.ipynb` — разведочный анализ данных;
+- `notebooks/03_training.ipynb` — **единственный** сценарий обучения, оценки и сохранения артефактов;
+- `run_demo.py` — end-to-end запуск уже обученной модели на URL;
+- `src/` — модули парсера, признаков, классификатора, метрик и pipeline;
+- `data/labels.csv` — фиксированный размеченный датасет;
+- `models/best_model.pkl` — сохранённый артефакт модели;
+- `results/metrics.csv`, `results/threshold_metrics.csv`, `results/split_assignment.csv` — артефакты основного эксперимента;
+- `tests/test_smoke.py` — минимальные проверки модулей и duplicate-safe split.
 
 ## Датасет
-Финальный датасет (без добавления новых данных):
-- 650 изображений;
-- 362 `content`;
-- 288 `non_content`;
-- 9 страниц.
 
-## Evaluation protocol
-1. **Основной**: `duplicate_safe_group_split(content_hash->canonical_image_url->normalized_image_url)`.
-   - Предотвращает утечку дубликатов между train/val/test.
-2. **Дополнительный stress-test**: `page_holdout_stress_test(page_stub->page_id->page_url)`.
-   - Показывает перенос на новые страницы, но на 9 страницах нестабилен и не заменяет основную метрику.
+На финальном этапе новые данные не добавлялись. Используется фиксированный датасет:
 
-## Модель
-- `LogisticRegression` на metadata/URL features.
-- `hard prefilter` перед ML для явного технического мусора.
-- Подбор threshold только на validation.
-- Финальная дедупликация в demo pipeline.
+| Показатель | Значение |
+|---|---:|
+| Всего изображений | 650 |
+| `content` | 362 |
+| `non_content` | 288 |
+| Исходных страниц | 9 |
 
-## Артефакты обучения (из `notebooks/03_training.ipynb`)
-- `models/best_model.pkl`
-- `results/metrics.csv`
-- `results/threshold_metrics.csv`
-- `results/split_assignment.csv`
+## Протокол оценки
 
-## Запуск
+Основной протокол: `duplicate_safe_group_split(canonical_image_url → normalized_image_url → candidate_id)`.
+
+Разбиение строится только по значениям, сохранённым в `data/labels.csv`, и не зависит от наличия локальных файлов в `data/raw/`. Варианты одной картинки, различающиеся расширением или параметрами ресайза/качества в URL, остаются в одной группе и не могут попасть одновременно в train, validation и test.
+
+Порог классификации подбирается **только на validation** с приоритетом precision; test используется только для итоговой оценки.
+
+## Модель и признаки
+
+- модель: `LogisticRegression`;
+- числовые признаки: размеры, площадь, aspect ratio, размер файла и URL/metadata-флаги;
+- категориальные признаки: формат файла и источник URL (`source_attr`);
+- hard prefilter до ML удаляет только явный технический мусор: невалидные изображения, tracking pixels, крайне маленькие изображения и надёжные technical/UI URL-сигналы;
+- финальная дедупликация применяется в demo pipeline после классификации.
+
+## Результаты основной оценки
+
+Выбранный threshold: **`0.49`**.
+
+| Split | Precision | Recall | F1 | Accuracy | TP | FP | FN | TN |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Train | 0.847 | 0.750 | 0.795 | 0.783 | 171 | 31 | 57 | 146 |
+| Validation | 0.808 | 0.737 | 0.771 | 0.771 | 42 | 10 | 15 | 42 |
+| Test | **0.843** | **0.909** | **0.875** | **0.853** | **70** | **13** | **7** | **46** |
+
+На test split модель сохраняет большую часть содержательных изображений (`recall = 0.909`) и при этом удерживает высокую долю корректных результатов среди сохранённых (`precision = 0.843`). Числа соответствуют сохранённым артефактам основного эксперимента и должны быть обновлены после повторного запуска notebook, если результаты изменятся.
+
+## Артефакты обучения
+
+Полный запуск `notebooks/03_training.ipynb` создаёт или обновляет:
+
+- `models/best_model.pkl`;
+- `results/metrics.csv`;
+- `results/threshold_metrics.csv`;
+- `results/split_assignment.csv`.
+
+## Установка и проверки
+
 ```bash
 pip install -r requirements.txt
-# Открыть и полностью выполнить notebooks/03_training.ipynb
-python run_demo.py --url "https://example.com" --model_path models/best_model.pkl
+python -m compileall src run_demo.py
+pytest -q
 ```
+
+Для повторного обучения и пересчёта метрик откройте и полностью выполните `notebooks/03_training.ipynb`.
+
+## Demo-запуск
+
+```bash
+python run_demo.py --url "URL_РЕАЛЬНОЙ_HTML_СТРАНИЦЫ" --model_path models/best_model.pkl
+```
+
+Для каждой страницы pipeline сохраняет результаты в `results/examples/<page_id>/`:
+
+- `page_info.json` — параметры запуска;
+- `candidates.csv` — все кандидаты и решения этапов фильтрации;
+- `final_kept.csv` — итогово сохранённые изображения;
+- `run_log.json` — сводная статистика запуска;
+- `final_keep/` — локальные файлы отобранных изображений.
+
+## Ограничения
+
+- Датасет небольшой и включает только 9 исходных страниц.
+- Baseline на metadata/URL-признаках может хуже работать на сайтах существенно другого типа.
+- Поддержка сложных SPA, infinite scroll, авторизации и защищённых изображений не является обязательной частью текущего MVP.
+- Строгое разделение по целым страницам полезно как дополнительный stress-test переносимости, но на текущем небольшом числе страниц нестабильно и не используется как основная финальная оценка.
