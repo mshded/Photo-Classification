@@ -1,0 +1,29 @@
+{
+  "total_candidates": 15,
+  "downloaded_ok": 14,
+  "hard_prefilter_rejected": 7,
+  "ml_candidates": 8,
+  "final_kept": 8,
+  "final_dedup_removed": 0,
+  "top_reject_reasons": {
+    "tiny_dimensions_le_5": 5,
+    "very_small_dimensions_le_32": 5,
+    "tiny_file_size": 5,
+    "probable_tracking_pixel": 5,
+    "tracking_url_hint": 2,
+    "ui_or_ads_keyword": 2,
+    "analytics_url_hint": 2,
+    "invalid_image": 2,
+    "download_failed": 1
+  },
+  "page_url": "https://www.sobaka.ru/entertainment/cinema/215358",
+  "page_id": "www.sobaka.ru_entertainment_cinema_215358",
+  "saved_images": 8,
+  "paths_to_saved_artifacts": {
+    "page_info": "results\\examples\\www.sobaka.ru_entertainment_cinema_215358\\page_info.json",
+    "candidates_csv": "results\\examples\\www.sobaka.ru_entertainment_cinema_215358\\candidates.csv",
+    "final_kept_csv": "results\\examples\\www.sobaka.ru_entertainment_cinema_215358\\final_kept.csv",
+    "run_log": "results\\examples\\www.sobaka.ru_entertainment_cinema_215358\\run_log.json",
+    "final_keep_dir": "results\\examples\\www.sobaka.ru_entertainment_cinema_215358\\final_keep"
+  }
+}

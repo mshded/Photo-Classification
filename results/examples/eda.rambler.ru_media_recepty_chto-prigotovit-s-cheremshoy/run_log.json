@@ -1,0 +1,28 @@
+{
+  "total_candidates": 153,
+  "downloaded_ok": 153,
+  "hard_prefilter_rejected": 10,
+  "ml_candidates": 143,
+  "final_kept": 29,
+  "final_dedup_removed": 24,
+  "top_reject_reasons": {
+    "tiny_dimensions_le_5": 8,
+    "very_small_dimensions_le_32": 8,
+    "tiny_file_size": 8,
+    "tracking_url_hint": 8,
+    "analytics_url_hint": 8,
+    "probable_tracking_pixel": 8,
+    "ui_or_ads_keyword": 5,
+    "invalid_image": 2
+  },
+  "page_url": "https://eda.rambler.ru/media/recepty/chto-prigotovit-s-cheremshoy",
+  "page_id": "eda.rambler.ru_media_recepty_chto-prigotovit-s-cheremshoy",
+  "saved_images": 29,
+  "paths_to_saved_artifacts": {
+    "page_info": "results\\examples\\eda.rambler.ru_media_recepty_chto-prigotovit-s-cheremshoy\\page_info.json",
+    "candidates_csv": "results\\examples\\eda.rambler.ru_media_recepty_chto-prigotovit-s-cheremshoy\\candidates.csv",
+    "final_kept_csv": "results\\examples\\eda.rambler.ru_media_recepty_chto-prigotovit-s-cheremshoy\\final_kept.csv",
+    "run_log": "results\\examples\\eda.rambler.ru_media_recepty_chto-prigotovit-s-cheremshoy\\run_log.json",
+    "final_keep_dir": "results\\examples\\eda.rambler.ru_media_recepty_chto-prigotovit-s-cheremshoy\\final_keep"
+  }
+}

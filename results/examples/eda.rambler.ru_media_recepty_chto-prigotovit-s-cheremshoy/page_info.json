@@ -1,0 +1,8 @@
+{
+  "page_url": "https://eda.rambler.ru/media/recepty/chto-prigotovit-s-cheremshoy",
+  "page_id": "eda.rambler.ru_media_recepty_chto-prigotovit-s-cheremshoy",
+  "pipeline": "ml_with_hard_prefilter_and_final_dedup",
+  "model_path": "models/best_model.pkl",
+  "raw_dir": "data\\raw",
+  "output_dir": "results\\examples\\eda.rambler.ru_media_recepty_chto-prigotovit-s-cheremshoy"
+}

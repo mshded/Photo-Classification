@@ -1,0 +1,19 @@
+{
+  "total_candidates": 111,
+  "downloaded_ok": 111,
+  "hard_prefilter_rejected": 0,
+  "ml_candidates": 111,
+  "final_kept": 5,
+  "final_dedup_removed": 44,
+  "top_reject_reasons": {},
+  "page_url": "https://www.nationalgeographic.com/environment/article/great-salt-lake-snowpack",
+  "page_id": "www.nationalgeographic.com_environment_article_great-salt-lake-snowpack",
+  "saved_images": 5,
+  "paths_to_saved_artifacts": {
+    "page_info": "results\\examples\\www.nationalgeographic.com_environment_article_great-salt-lake-snowpack\\page_info.json",
+    "candidates_csv": "results\\examples\\www.nationalgeographic.com_environment_article_great-salt-lake-snowpack\\candidates.csv",
+    "final_kept_csv": "results\\examples\\www.nationalgeographic.com_environment_article_great-salt-lake-snowpack\\final_kept.csv",
+    "run_log": "results\\examples\\www.nationalgeographic.com_environment_article_great-salt-lake-snowpack\\run_log.json",
+    "final_keep_dir": "results\\examples\\www.nationalgeographic.com_environment_article_great-salt-lake-snowpack\\final_keep"
+  }
+}
