@@ -29,14 +29,20 @@ def test_features_nan_and_tracking():
     assert is_probable_tracking_pixel(1,1,100,'https://x/track/pixel','x')
 
 
-def test_split_group_reproducible():
-    df=pd.DataFrame({'target':[1,0,1,0,1,0],'page_stub':['p1','p1','p2','p2','p3','p3']})
-    a=_assign_group_splits(df,random_state=42)
-    b=_assign_group_splits(df,random_state=42)
-    assert a['split'].tolist()==b['split'].tolist()
-    for s1 in ['train','val','test']:
-        for s2 in ['train','val','test']:
-            if s1<s2:
-                g1=set(a.loc[a['split']==s1,'page_stub'])
-                g2=set(a.loc[a['split']==s2,'page_stub'])
-                assert g1.isdisjoint(g2)
+def test_duplicate_urls():
+    df = pd.DataFrame({
+        "target": [1, 1, 0, 0, 1, 0],
+        "image_url": [
+            "https://site.org/image.jpg?w=100",
+            "https://site.org/image.jpg?w=500",
+            "https://site.org/logo.png",
+            "https://site.org/banner.png",
+            "https://site.org/photo2.jpg",
+            "https://site.org/icon.png",
+        ],
+    })
+
+    split_df = _assign_group_splits(df, random_state=42)
+
+    duplicate_rows = split_df.iloc[[0, 1]]
+    assert duplicate_rows["split"].nunique() == 1
