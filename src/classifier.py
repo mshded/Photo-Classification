@@ -236,11 +236,33 @@ def load_labeled_data(
         and out["split"].fillna("").str.strip().ne("").any()
     ):
         out["split"] = out["split"].fillna("").astype(str).str.strip().str.lower()
-        return out
+    else:
+        out = _assign_group_splits(out, random_state=42)
 
-    return _assign_group_splits(out, random_state=42)
+    validate_no_page_leakage(out)
+    return out
 
 
+
+
+def validate_no_page_leakage(df: pd.DataFrame) -> None:
+    splits = {name: set(build_page_group_id(df[df["split"] == name]).astype(str)) for name in ["train", "val", "test"]}
+    pairs = [("train", "val"), ("train", "test"), ("val", "test")]
+    for a,b in pairs:
+        inter = (splits[a] & splits[b]) - {""}
+        if inter:
+            raise ValueError(f"Page leakage detected between {a} and {b}: {sorted(list(inter))[:5]}")
+
+
+def build_split_assignment(df: pd.DataFrame) -> pd.DataFrame:
+    page_group = build_page_group_id(df).astype(str)
+    return pd.DataFrame({
+        "row_id": df.index.astype(str),
+        "page_group": page_group,
+        "label": df.get("label", ""),
+        "target": df.get("target", pd.Series(index=df.index, dtype=int)),
+        "split": df.get("split", ""),
+    })
 def build_model_pipeline(model_type: str = "logreg") -> Pipeline:
     preprocessor = ColumnTransformer(
         transformers=[
@@ -328,7 +350,7 @@ def train_and_save_model(
         "model_type": model_type,
         "numeric_features": NUMERIC_FEATURES,
         "categorical_features": CATEGORICAL_FEATURES,
-        "split_strategy": "group_split(content_hash->canonical_image_id->normalized_image_url->page_url)",
+        "split_strategy": "page_level_group_split(page_stub->page_id->page_url)",
         "threshold_selection": {
             "min_precision": THRESHOLD_MIN_PRECISION,
             "min_positive_predictions": THRESHOLD_MIN_POSITIVE_PREDICTIONS,
@@ -337,10 +359,13 @@ def train_and_save_model(
     }
     save_model_artifacts(artifacts=artifacts, model_path=model_path)
 
+    split_assignment = build_split_assignment(df)
+
     return {
         "threshold": float(threshold),
         "train_metrics": evaluate_model_on_split(train_df["target"], train_pred, train_proba),
         "val_metrics": evaluate_model_on_split(val_df["target"], val_pred, val_proba),
         "test_metrics": evaluate_model_on_split(test_df["target"], test_pred, test_proba),
         "threshold_table": threshold_table,
+        "split_assignment": split_assignment,
     }
